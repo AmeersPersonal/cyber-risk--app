@@ -8,11 +8,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from packaging.version import InvalidVersion, Version
 
-SUMMARY_PATH = Path(__file__).resolve().parent / "summary.json"
 CISA_KEV_URL = (
     "https://www.cisa.gov/sites/default/files/feeds/"
     "known_exploited_vulnerabilities.json"
@@ -35,31 +33,6 @@ def empty_summary():
         "matched": [],
         "cross_check": {},
     }
-
-
-def load_summary(path=None):
-    path = Path(path) if path else SUMMARY_PATH
-    if not path.exists() or path.stat().st_size == 0:
-        return empty_summary()
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return empty_summary()
-    if not isinstance(data, dict):
-        return empty_summary()
-    data.setdefault("items", [])
-    data.setdefault("matched", [])
-    data.setdefault("sources", [])
-    data.setdefault("cross_check", {})
-    data.setdefault("count", len(data.get("items") or []))
-    data.setdefault("source", "multi")
-    return data
-
-
-def save_summary(data, path=None):
-    path = Path(path) if path else SUMMARY_PATH
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    return data
 
 
 def _http_json(url, opener, method="GET", body=None, headers=None, timeout=20):
@@ -212,6 +185,8 @@ def _merge_items(groups):
             for field in ("vendor", "product", "name"):
                 if not existing.get(field) and item.get(field):
                     existing[field] = item[field]
+            if not existing.get("affected") and item.get("affected"):
+                existing["affected"] = item["affected"]
     return list(by_id.values())
 
 
@@ -359,6 +334,49 @@ def match_cves(items, packages):
     return found
 
 
+def _rows_to_items(rows, headers=None):
+    """Convert Zetaris query rows to the standard CVE item format."""
+    items = []
+    for row in rows or []:
+        if isinstance(row, list) and headers:
+            row = dict(zip(headers, row))
+        if not isinstance(row, dict):
+            continue
+        sources_raw = row.get("sources") or ""
+        sources = [s.strip() for s in sources_raw.split(",") if s.strip()]
+        score = row.get("cvss_score")
+        if isinstance(score, str):
+            try:
+                score = float(score)
+            except ValueError:
+                score = None
+        items.append({
+            "cve_id": row.get("cve_id") or "",
+            "vendor": row.get("vendor") or "",
+            "product": row.get("product") or "",
+            "name": row.get("name") or "",
+            "date_added": row.get("date_added") or "",
+            "description": row.get("description") or "",
+            "cvss_score": score,
+            "severity": row.get("severity") or "",
+            "sources": sources or ["zetaris"],
+        })
+    return items
+
+
+def fetch_cves_from_zetaris(zetaris_client, limit=50):
+    """Query the cve_items table in Zetaris. Returns (items, ok)."""
+    sql = f"SELECT cve_id, vendor, product, name, date_added, description, cvss_score, severity, sources FROM cve_items LIMIT {int(limit)}"
+    result = zetaris_client.run_sql(sql)
+    if not result.get("ok"):
+        return [], False
+    items = _rows_to_items(
+        result.get("data") or [],
+        headers=result.get("headers"),
+    )
+    return items, True
+
+
 def fetch_cisa_kev(opener, limit=25):
     payload = _http_json(CISA_KEV_URL, opener)
     return parse_kev(payload, limit=limit)
@@ -500,17 +518,68 @@ def _osv_item(entry, package):
     }
 
 
-def fetch_latest_cves(path=None, opener=None, fingerprints=None, packages=None, limit=25):
-    """Query OSV for exact package versions and badge hits that are also in CISA KEV.
+def fetch_latest_cves(opener=None, fingerprints=None, packages=None, limit=25, zetaris_client=None):
+    """Fetch CVEs, preferring Zetaris as the data layer.
 
-    A CVE is stored only when OSV returns it for that version. Bulk name overlap
-    against NVD or KEV is not used. `fingerprints` is accepted and ignored.
+    When a configured ZetarisClient is provided (or importable), queries the
+    cve_items table first.  Falls back to direct OSV/KEV API calls when Zetaris
+    is unavailable or empty.
     """
     del fingerprints
     opener = opener or urllib.request.urlopen
     packages = [item for item in (packages or []) if isinstance(item, dict)][:15]
     errors = {}
     sources_ok = []
+
+    # --- Zetaris-first path ---
+    if zetaris_client is None:
+        try:
+            from ai.zetaris_client import ZetarisClient
+            zetaris_client = ZetarisClient()
+        except Exception:
+            zetaris_client = None
+
+    if zetaris_client is not None and zetaris_client.configured():
+        zetaris_items, zetaris_ok = fetch_cves_from_zetaris(zetaris_client, limit=limit)
+        if zetaris_ok and zetaris_items:
+            sources_ok.append("zetaris")
+            # Zetaris provides the CVE catalog; OSV enriches with affected
+            # version ranges so match_cves can do exact version matching.
+            osv_enriched = []
+            if packages:
+                for package in packages:
+                    try:
+                        osv_enriched.extend(query_osv_version(opener, package, limit=limit))
+                    except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError, KeyError) as exc:
+                        errors[f"osv:{package.get('name')}"] = str(exc)
+                if osv_enriched:
+                    sources_ok.append("osv")
+            kev = set()
+            try:
+                kev = fetch_kev_ids(opener)
+                sources_ok.append("cisa_kev")
+            except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError, KeyError) as exc:
+                errors["cisa_kev"] = str(exc)
+            items = _merge_items([zetaris_items, osv_enriched])
+            for item in items:
+                if item.get("cve_id") in kev and "cisa_kev" not in (item.get("sources") or []):
+                    item.setdefault("sources", []).append("cisa_kev")
+                    item["kev"] = True
+            return {
+                "fetched_at": _now(),
+                "source": "zetaris",
+                "sources": sources_ok,
+                "errors": errors,
+                "count": len(items),
+                "items": items,
+                "packages": packages,
+                "matched": [],
+                "cross_check": cross_check_summary(items),
+            }
+        if not zetaris_ok:
+            errors["zetaris"] = "query failed or not configured"
+
+    # --- Fallback: direct API fetch ---
     kev = set()
     try:
         kev = fetch_kev_ids(opener)
@@ -534,17 +603,16 @@ def fetch_latest_cves(path=None, opener=None, fingerprints=None, packages=None, 
             errors["osv"] = str(exc)
 
     if not groups and not sources_ok:
-        cached = load_summary(path)
-        cached.setdefault("matched", [])
-        cached.setdefault("errors", errors)
-        return cached
+        result = empty_summary()
+        result["errors"] = errors
+        return result
 
     items = _merge_items(groups)
     for item in items:
         if item.get("cve_id") in kev and "cisa_kev" not in (item.get("sources") or []):
             item.setdefault("sources", []).append("cisa_kev")
             item["kev"] = True
-    summary = {
+    return {
         "fetched_at": _now(),
         "source": "version_matched",
         "sources": sources_ok,
@@ -555,4 +623,3 @@ def fetch_latest_cves(path=None, opener=None, fingerprints=None, packages=None, 
         "matched": [],
         "cross_check": cross_check_summary(items),
     }
-    return save_summary(summary, path)

@@ -33,7 +33,6 @@ def create_app():
     from ai.main import files_from_zip, run_scan
     from ai.model_client import ModelClient
     from ai.tool import list_tools
-    from ai.cve_manger import load_summary
     from report import render_pdf
 
     app = FastAPI(title="Cyber Risk Scan API")
@@ -79,10 +78,6 @@ def create_app():
     @app.get("/tools")
     def tools():
         return {"tools": list_tools()}
-
-    @app.get("/cves")
-    def cves():
-        return load_summary()
 
     @app.post("/scan/url")
     def scan_url(body: UrlScan, format: str = "json"):

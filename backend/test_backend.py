@@ -561,6 +561,193 @@ class CveKnowledgeTests(unittest.TestCase):
         self.assertTrue(context["text"])
 
 
+class ZetarisCveIntegrationTests(unittest.TestCase):
+    def _make_client(self, responses):
+        """Build a ZetarisClient with a fake opener that returns canned responses."""
+        call_log = []
+
+        def opener(request, timeout=20):
+            call_log.append(json.loads(request.data.decode("utf-8"))["sql"])
+            body = responses.pop(0) if responses else {}
+            raw = json.dumps(body).encode("utf-8")
+
+            class Resp:
+                def read(self):
+                    return raw
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    return False
+
+            return Resp()
+
+        client = ZetarisClient(
+            cfg={
+                "rest_url": "http://zetaris.test/api/v1.0",
+                "org_id": "org-1",
+                "api_key": "key-1",
+                "query_limit": 100,
+                "threat_sql": "",
+            },
+            opener=opener,
+        )
+        return client, call_log
+
+    def test_write_sql_sends_statement(self):
+        client, log = self._make_client([{"ok": True}])
+        result = client.write_sql("CREATE TABLE test (id INT)")
+        self.assertTrue(result["ok"])
+        self.assertEqual(log[0], "CREATE TABLE test (id INT)")
+
+    def test_write_sql_offline_when_not_configured(self):
+        client = ZetarisClient(
+            cfg={"rest_url": "http://x", "org_id": "", "api_key": "", "threat_sql": ""}
+        )
+        result = client.write_sql("CREATE TABLE test (id INT)")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["mode"], "offline")
+
+    def test_fetch_cves_from_zetaris_parses_rows(self):
+        rows = [
+            {
+                "cve_id": "CVE-2024-1234",
+                "vendor": "PyPI",
+                "product": "django",
+                "name": "CVE-2024-1234",
+                "date_added": "2024-06-01",
+                "description": "A django issue",
+                "cvss_score": "9.1",
+                "severity": "critical",
+                "sources": "nist_nvd,cisa_kev",
+            }
+        ]
+        client, _ = self._make_client([{"headers": list(rows[0].keys()), "data": rows}])
+        items, ok = cve_manger.fetch_cves_from_zetaris(client, limit=10)
+        self.assertTrue(ok)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["cve_id"], "CVE-2024-1234")
+        self.assertEqual(items[0]["cvss_score"], 9.1)
+        self.assertEqual(set(items[0]["sources"]), {"nist_nvd", "cisa_kev"})
+
+    def test_fetch_cves_from_zetaris_returns_empty_on_failure(self):
+        client = ZetarisClient(
+            cfg={"rest_url": "http://x", "org_id": "", "api_key": "", "threat_sql": ""}
+        )
+        items, ok = cve_manger.fetch_cves_from_zetaris(client, limit=10)
+        self.assertFalse(ok)
+        self.assertEqual(items, [])
+
+    def test_fetch_latest_cves_prefers_zetaris(self):
+        zetaris_rows = [
+            {
+                "cve_id": "CVE-Z-001",
+                "vendor": "PyPI",
+                "product": "flask",
+                "name": "CVE-Z-001",
+                "date_added": "2024-01-01",
+                "description": "Zetaris-loaded CVE",
+                "cvss_score": "7.5",
+                "severity": "high",
+                "sources": "zetaris",
+            }
+        ]
+        client, _ = self._make_client(
+            [{"headers": list(zetaris_rows[0].keys()), "data": zetaris_rows}]
+        )
+        summary = cve_manger.fetch_latest_cves(
+            packages=[],
+            zetaris_client=client,
+        )
+        self.assertEqual(summary["source"], "zetaris")
+        self.assertIn("zetaris", summary["sources"])
+        self.assertEqual(summary["items"][0]["cve_id"], "CVE-Z-001")
+
+    def test_zetaris_path_enriches_with_osv_affected_ranges(self):
+        """Zetaris catalog + OSV version query = items with affected ranges."""
+        zetaris_rows = [
+            {
+                "cve_id": "CVE-2024-1111",
+                "vendor": "PyPI",
+                "product": "django",
+                "name": "CVE-2024-1111",
+                "date_added": "2024-06-01",
+                "description": "A django issue",
+                "cvss_score": "9.8",
+                "severity": "critical",
+                "sources": "zetaris",
+            }
+        ]
+        zetaris_client, _ = self._make_client(
+            [{"headers": list(zetaris_rows[0].keys()), "data": zetaris_rows}]
+        )
+
+        class Body:
+            def __init__(self, payload):
+                self._data = json.dumps(payload).encode("utf-8")
+            def read(self):
+                return self._data
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        def opener(request, timeout=20):
+            url = request.full_url
+            if "known_exploited" in url:
+                return Body({"vulnerabilities": [{"cveID": "CVE-2024-1111"}]})
+            return Body({
+                "vulns": [{
+                    "id": "GHSA-1",
+                    "aliases": ["CVE-2024-1111"],
+                    "summary": "django issue",
+                    "affected": [{
+                        "package": {"name": "Django", "ecosystem": "PyPI"},
+                        "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "3.2.1"}]}],
+                    }],
+                    "database_specific": {"cvss_score": 9.8},
+                }]
+            })
+
+        summary = cve_manger.fetch_latest_cves(
+            opener=opener,
+            packages=[{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
+            zetaris_client=zetaris_client,
+        )
+        self.assertEqual(summary["source"], "zetaris")
+        self.assertIn("zetaris", summary["sources"])
+        matched = cve_manger.match_cves(
+            summary["items"],
+            [{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
+        )
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["cve_id"], "CVE-2024-1111")
+        self.assertTrue(matched[0]["version_confirmed"])
+        self.assertIn("cisa_kev", matched[0]["sources"])
+
+    def test_setup_zetaris_inserts_cves(self):
+        from ai.setup_zetaris import _insert_sql, _escape
+
+        item = {
+            "cve_id": "CVE-2024-5678",
+            "vendor": "PyPI",
+            "product": "requests",
+            "name": "CVE-2024-5678",
+            "date_added": "2024-07-01",
+            "description": "A request's issue with single quote",
+            "cvss_score": 8.2,
+            "severity": "high",
+            "sources": ["nist_nvd", "osv"],
+        }
+        sql = _insert_sql(item, "2024-07-01T00:00:00Z")
+        self.assertIn("CVE-2024-5678", sql)
+        self.assertIn("INSERT INTO cve_items", sql)
+        self.assertIn("nist_nvd,osv", sql)
+        self.assertNotIn("''", _escape("safe"))
+        self.assertIn("''", _escape("it's"))
+
+
 class CouncilAndIntegrationTests(unittest.TestCase):
     def test_zetaris_rejects_non_readonly_sql(self):
         with self.assertRaises(ValueError):
@@ -775,12 +962,10 @@ class VersionMatchAndModelTests(unittest.TestCase):
                 }
             )
 
-        with tempfile.TemporaryDirectory() as tmp:
-            summary = cve_manger.fetch_latest_cves(
-                path=Path(tmp) / "summary.json",
-                opener=opener,
-                packages=[{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
-            )
+        summary = cve_manger.fetch_latest_cves(
+            opener=opener,
+            packages=[{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
+        )
         matched = cve_manger.match_cves(
             summary["items"],
             [{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],

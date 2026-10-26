@@ -2,10 +2,9 @@
 
 Backend for the GenWorks Open Agent Hackathon cyber risk app.
 
-- Integrates **Zetaris** (data layer) via REST SQL for company threat context.
+- **Zetaris** is the primary data layer for CVE intelligence. `setup_zetaris.py` fetches from NIST NVD, CISA KEV, and OSV and loads the `cve_items` table. At scan time, `cve_manger.py` queries Zetaris first and falls back to direct API calls when Zetaris is unavailable. Company threat context also flows through Zetaris.
 - Integrates **Meterless** patterns: Scout intent routing, H-MEM memory, and a parallel agent council (swarm-style debate).
 - `DebateManager` enforces reasoning guidelines, resolves parallel tool collisions, and stores per-agent debate context.
-- CVE intel is fetched from **CISA KEV**, **NIST NVD**, and **OSV**, then cross-checked by CVE id.
 - Reports use a **1-10** risk score. It is marked confirmed CVSS only when a version-matched CVE includes a numeric CVSS value; otherwise the label is heuristic. Reports include narrative, pass/fail tool outcomes, CVEs tried/matched, and an after-action remediation plan. The same report can be downloaded as a PDF from `POST /report/pdf`, or from `/scan/url` and `/scan/source` with `format=pdf`.
 - CVE matches require an exact manifest version inside the affected range (OSV query plus CISA KEV badge). Duplicate arsenal checks were removed.
 - Council agents call an OpenAI-compatible model when `METERLESS_API_KEY` is set. Tool votes stay inside the arsenal.

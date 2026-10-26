@@ -111,6 +111,40 @@ class ZetarisClient:
             "raw": body,
         }
 
+    def write_sql(self, sql):
+        """Execute a write statement (CREATE, INSERT, DROP) for admin/setup use."""
+        sql = " ".join((sql or "").strip().split())
+        if not sql:
+            raise ValueError("empty SQL")
+        if not self.configured():
+            return {
+                "ok": False,
+                "mode": "offline",
+                "error": "Zetaris is not configured; set ZETARIS_API_KEY and ZETARIS_ORG_ID",
+            }
+
+        url = f"{self.cfg['rest_url']}/sql-editor/sqls/run-query"
+        payload = json.dumps({"sql": sql}).encode("utf-8")
+        request = urllib.request.Request(
+            url,
+            data=payload,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {self.cfg['api_key']}",
+                "X-Org-ID": str(self.cfg["org_id"]),
+                "X-Request-ID": str(uuid.uuid4()),
+                "Content-Type": "application/json",
+                "User-Agent": "CyberRiskCouncil/1.0",
+            },
+        )
+        try:
+            with self.opener(request, timeout=20) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+        except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError) as exc:
+            return {"ok": False, "mode": "error", "error": str(exc)}
+
+        return {"ok": True, "mode": "zetaris", "raw": body}
+
     def company_threat_context(self, company_hint="", fingerprints=None):
         """Query Zetaris for company threat context, or return a local fallback."""
         fingerprints = fingerprints or []
