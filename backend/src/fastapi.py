@@ -79,6 +79,22 @@ def create_app():
     def tools():
         return {"tools": list_tools()}
 
+    @app.get("/cves")
+    def cves():
+        from ai.cve_manger import fetch_cves_from_zetaris, cross_check_summary
+        from ai.zetaris_client import ZetarisClient
+
+        client = ZetarisClient()
+        items, ok = fetch_cves_from_zetaris(client, limit=100)
+        if not ok:
+            raise HTTPException(status_code=503, detail="Zetaris is not configured or unreachable")
+        return {
+            "source": "zetaris",
+            "count": len(items),
+            "items": items,
+            "cross_check": cross_check_summary(items),
+        }
+
     @app.post("/scan/url")
     def scan_url(body: UrlScan, format: str = "json"):
         chosen = _report_format(format)
