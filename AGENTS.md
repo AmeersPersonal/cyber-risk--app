@@ -1,5 +1,13 @@
 # Agent rules
 
+## Project
+
+This project is for the GenWorks Open Agent Hackathon.
+
+The goal is a cybersecurity application that tests websites and applications. The user provides a URL or uploads source code. Either way, the AI creates a safe environment and runs the tests there.
+
+The application uses libraries to track the latest zero-day CVEs and tests the user's application against them.
+
 These rules apply to every change in this repository.
 
 ## Document the change

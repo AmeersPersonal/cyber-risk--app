@@ -1,5 +1,11 @@
 # Spec
 
+## AGENTS.md
+
+Added a Project section stating this repository is for the GenWorks Open Agent Hackathon. The application tests websites and applications from a URL or uploaded source code inside a safe environment, and uses libraries to track the latest zero-day CVEs and test the user's application against them.
+
+`test_agents_md.py` checks that this section is present.
+
 ## .gitignore
 
 Added a root `.gitignore` for a Python AI cyber threat analysis agent.
