@@ -3,6 +3,8 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 
+from ai.cve_knowledge import agent_context, initialize_cve_knowledge
+from ai.debate_manger import DebateManager
 from ai.meterless_memory import MemoryRetrieval, MemoryStore, format_reinjection
 from ai.meterless_scout import Scout
 from ai.tool import ARSENAL, run_tool
@@ -22,19 +24,24 @@ class CouncilAgent:
         self.role = role
         self.preferred_tools = [tool for tool in preferred_tools if tool in ARSENAL]
 
-    def propose(self, target, memory_text, used_tools, intel):
+    def propose(self, target, memory_text, used_tools, intel, cve_brief="", guidelines=""):
         available = [name for name in self.preferred_tools if name not in used_tools]
         kind = target.get("kind")
         argument = (
             f"{self.name} ({self.role}): for a {kind} target, next we should run "
-            f"{', '.join(available[:3]) or 'nothing further'}."
+            f"{', '.join(available[:3]) or 'nothing further'} because those checks "
+            f"match this role's attack surface."
         )
         if intel.get("source") == "zetaris" and self.name == "intel":
             argument += " Zetaris returned live company threat rows; prioritize stack and CVE-aligned checks."
+        if cve_brief and self.name in {"intel", "attacker_mindset", "defender"}:
+            argument += f" Local CVE context: {cve_brief[:220]}"
         if "high" in memory_text and self.name == "attacker_mindset":
             argument += " Prior findings are high severity; deepen injection and access paths."
         if "high" in memory_text and self.name == "defender":
             argument += " Prior findings are high severity; harden session, CSRF, and crypto next."
+        if guidelines:
+            argument += " Following debate guidelines: no bare agree/disagree; justify every vote."
         votes = available[:3]
         return {
             "agent": self.name,
@@ -121,6 +128,7 @@ class ThreatCouncil:
         scout=None,
         memory=None,
         zetaris=None,
+        debate_manager=None,
         max_rounds=None,
         tools_per_round=None,
     ):
@@ -129,25 +137,37 @@ class ThreatCouncil:
         self.memory = memory or MemoryStore()
         self.retrieval = MemoryRetrieval(self.memory)
         self.zetaris = zetaris or ZetarisClient()
+        self.debate_manager = debate_manager or DebateManager()
         self.max_rounds = max_rounds if max_rounds is not None else _env_int(
             "METERLESS_COUNCIL_ROUNDS", 3
         )
         self.tools_per_round = tools_per_round if tools_per_round is not None else _env_int(
             "METERLESS_TOOLS_PER_ROUND", 4
         )
+        initialize_cve_knowledge()
+        self.cve_context = agent_context()
 
     def _gather_proposals(self, target, used_tools, intel):
         memory_hit = self.retrieval.query(
-            text="threat findings next action company",
+            text="threat findings next action company CVE",
             top_n=5,
             threshold=0.0,
             strategy="comprehensive",
         )
         memory_text = format_reinjection(memory_hit["memories"])
+        cve_brief = (self.cve_context or {}).get("text", "")
+        guidelines = self.debate_manager.guidelines_prompt()
         proposals = []
 
         def work(agent):
-            return agent.propose(target, memory_text, used_tools, intel)
+            return agent.propose(
+                target,
+                memory_text,
+                used_tools,
+                intel,
+                cve_brief=cve_brief,
+                guidelines=guidelines,
+            )
 
         with ThreadPoolExecutor(max_workers=len(self.agents)) as pool:
             futures = [pool.submit(work, agent) for agent in self.agents]
@@ -170,6 +190,11 @@ class ThreatCouncil:
             f"Threat intel from {intel.get('source')} for {intel.get('company')}",
             meta={"rows": len(intel.get("rows") or []), "fingerprints": fingerprints[:8]},
         )
+        self.memory.add(
+            "cve_knowledge",
+            f"Local common CVE briefs: {', '.join((self.cve_context or {}).get('common_cves') or [])}",
+            meta={"briefs": (self.cve_context or {}).get("briefs") or []},
+        )
 
         for round_index in range(1, self.max_rounds + 1):
             proposals, memory_trace = self._gather_proposals(target, used_tools, intel)
@@ -188,10 +213,16 @@ class ThreatCouncil:
                 max_tools=self.tools_per_round,
             )
 
-            # Blend Scout plan with council votes: votes first, then Scout fill.
-            chosen = []
+            moderated = self.debate_manager.moderate_round(
+                round_index,
+                proposals,
+                used_tools=used_tools,
+                max_tools=self.tools_per_round,
+            )
+            # Debate manager resolves collisions first; Scout fills remaining slots.
+            chosen = list(moderated.get("chosen_tools") or [])
             for name, _ in vote_ranking:
-                if name not in chosen:
+                if name not in chosen and name not in used_tools and name in ARSENAL:
                     chosen.append(name)
                 if len(chosen) >= self.tools_per_round:
                     break
@@ -212,6 +243,11 @@ class ThreatCouncil:
                     "candidates": decision.get("candidates"),
                     "executionContract": decision.get("executionContract"),
                     "engine": decision.get("engine"),
+                },
+                "debate_manager": {
+                    "session_id": moderated.get("session_id"),
+                    "collisions": moderated.get("collisions"),
+                    "resolution": moderated.get("resolution"),
                 },
                 "memory_trace": memory_trace,
                 "chosen_tools": chosen,
@@ -244,5 +280,6 @@ class ThreatCouncil:
                 "meterless_scout": "meterless-scout-local",
                 "meterless_hmem": "meterless-hmem-local",
                 "council": "parallel-threat-council",
+                "debate_manager": "debate-manager-local",
             },
         }

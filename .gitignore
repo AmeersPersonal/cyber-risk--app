@@ -47,3 +47,5 @@ vectorstore/
 chroma_db/
 *.pcap
 data/raw/
+backend/src/ai/local_debate_storage/**
+!backend/src/ai/local_debate_storage/.gitkeep
