@@ -585,7 +585,8 @@ class ZetarisCveIntegrationTests(unittest.TestCase):
 
         client = ZetarisClient(
             cfg={
-                "rest_url": "http://zetaris.test/api/v1.0",
+                "base_url": "http://zetaris.test",
+                "query_path": "/api/proxy/sql-editor/sqls/run-query",
                 "org_id": "org-1",
                 "api_key": "key-1",
                 "query_limit": 100,
@@ -603,7 +604,7 @@ class ZetarisCveIntegrationTests(unittest.TestCase):
 
     def test_write_sql_offline_when_not_configured(self):
         client = ZetarisClient(
-            cfg={"rest_url": "http://x", "org_id": "", "api_key": "", "threat_sql": ""}
+            cfg={"base_url": "http://x", "query_path": "/api/proxy/sql-editor/sqls/run-query", "org_id": "", "api_key": "", "query_limit": 1000, "threat_sql": ""}
         )
         result = client.write_sql("CREATE TABLE test (id INT)")
         self.assertFalse(result["ok"])
@@ -633,7 +634,7 @@ class ZetarisCveIntegrationTests(unittest.TestCase):
 
     def test_fetch_cves_from_zetaris_returns_empty_on_failure(self):
         client = ZetarisClient(
-            cfg={"rest_url": "http://x", "org_id": "", "api_key": "", "threat_sql": ""}
+            cfg={"base_url": "http://x", "query_path": "/api/proxy/sql-editor/sqls/run-query", "org_id": "", "api_key": "", "query_limit": 1000, "threat_sql": ""}
         )
         items, ok = cve_manger.fetch_cves_from_zetaris(client, limit=10)
         self.assertFalse(ok)
@@ -726,26 +727,48 @@ class ZetarisCveIntegrationTests(unittest.TestCase):
         self.assertTrue(matched[0]["version_confirmed"])
         self.assertIn("cisa_kev", matched[0]["sources"])
 
-    def test_setup_zetaris_inserts_cves(self):
-        from ai.setup_zetaris import _insert_sql, _escape
+    def test_setup_zetaris_insert_values(self):
+        from ai.setup_zetaris import _insert_values, _escape_pg
 
-        item = {
-            "cve_id": "CVE-2024-5678",
-            "vendor": "PyPI",
-            "product": "requests",
-            "name": "CVE-2024-5678",
-            "date_added": "2024-07-01",
-            "description": "A request's issue with single quote",
-            "cvss_score": 8.2,
-            "severity": "high",
-            "sources": ["nist_nvd", "osv"],
-        }
-        sql = _insert_sql(item, "2024-07-01T00:00:00Z")
-        self.assertIn("CVE-2024-5678", sql)
-        self.assertIn("INSERT INTO cve_items", sql)
-        self.assertIn("nist_nvd,osv", sql)
-        self.assertNotIn("''", _escape("safe"))
-        self.assertIn("''", _escape("it's"))
+        items = [
+            {
+                "cve_id": "CVE-2024-5678",
+                "vendor": "PyPI",
+                "product": "requests",
+                "name": "CVE-2024-5678",
+                "date_added": "2024-07-01",
+                "description": "A request's issue with single quote",
+                "cvss_score": 8.2,
+                "severity": "high",
+                "sources": ["nist_nvd", "osv"],
+            }
+        ]
+        stmts = _insert_values(items, "2024-07-01T00:00:00Z")
+        self.assertEqual(len(stmts), 1)
+        self.assertIn("CVE-2024-5678", stmts[0])
+        self.assertIn("INSERT INTO cve_items", stmts[0])
+        self.assertIn("nist_nvd,osv", stmts[0])
+        self.assertIn("ON CONFLICT", stmts[0])
+        self.assertNotIn("''", _escape_pg("safe"))
+        self.assertIn("''", _escape_pg("it's"))
+
+    def test_setup_zetaris_batches_inserts(self):
+        from ai.setup_zetaris import _insert_values
+
+        items = [
+            {"cve_id": f"CVE-{i}", "sources": ["test"]}
+            for i in range(120)
+        ]
+        stmts = _insert_values(items, "2024-01-01T00:00:00Z", batch_size=50)
+        self.assertEqual(len(stmts), 3)
+
+    def test_fetch_cves_from_zetaris_uses_qualified_table(self):
+        """The Zetaris query must use CVE_PG.cve_items (schema-qualified)."""
+        client, log = self._make_client(
+            [{"headers": ["cve_id"], "data": [["CVE-1"]]}]
+        )
+        cve_manger.fetch_cves_from_zetaris(client, limit=5)
+        self.assertIn("CVE_PG.cve_items", log[0])
 
 
 class CouncilAndIntegrationTests(unittest.TestCase):
@@ -755,7 +778,7 @@ class CouncilAndIntegrationTests(unittest.TestCase):
         self.assertEqual(assert_readonly_sql("SELECT 1"), "SELECT 1")
 
     def test_zetaris_offline_fallback(self):
-        client = ZetarisClient(cfg={"rest_url": "http://example", "org_id": "", "api_key": "", "threat_sql": ""})
+        client = ZetarisClient(cfg={"base_url": "http://example", "query_path": "/api/proxy/sql-editor/sqls/run-query", "org_id": "", "api_key": "", "query_limit": 1000, "threat_sql": ""})
         result = client.company_threat_context("Acme", fingerprints=["django"])
         self.assertEqual(result["source"], "local_fallback")
 

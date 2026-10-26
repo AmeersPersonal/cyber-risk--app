@@ -365,8 +365,8 @@ def _rows_to_items(rows, headers=None):
 
 
 def fetch_cves_from_zetaris(zetaris_client, limit=50):
-    """Query the cve_items table in Zetaris. Returns (items, ok)."""
-    sql = f"SELECT cve_id, vendor, product, name, date_added, description, cvss_score, severity, sources FROM cve_items LIMIT {int(limit)}"
+    """Query the CVE_PG.cve_items table in Zetaris. Returns (items, ok)."""
+    sql = f"SELECT cve_id, vendor, product, name, date_added, description, cvss_score, severity, sources FROM CVE_PG.cve_items LIMIT {int(limit)}"
     result = zetaris_client.run_sql(sql)
     if not result.get("ok"):
         return [], False
