@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from ai import cve_manger
 from ai.council import ThreatCouncil
+from ai.manifests import packages_from_files
 from ai.cve_knowledge import (
     initialize_cve_knowledge,
     load_all_cve_knowledge,
@@ -89,13 +90,17 @@ def _prepare_target(target, fetcher=None):
 def run_scan(target, fetcher=None, cve_source=None, council=None, company_hint=""):
     prepared = _prepare_target(target, fetcher=fetcher)
     fingerprints = fingerprints_from_target(prepared)
+    packages = packages_from_files(prepared.get("files") or {})
+    fingerprints.extend(
+        f"{item['name']}=={item['version']}" for item in packages
+    )
 
     summary = (
         cve_source
         if cve_source is not None
-        else cve_manger.fetch_latest_cves(fingerprints=fingerprints)
+        else cve_manger.fetch_latest_cves(packages=packages, fingerprints=fingerprints)
     )
-    matched = cve_manger.match_cves(summary.get("items") or [], fingerprints)
+    matched = cve_manger.match_cves(summary.get("items") or [], packages)
     local_entries = load_all_cve_knowledge()
     local_map = {entry["cve_name"]: entry for entry in local_entries}
     for item in matched:

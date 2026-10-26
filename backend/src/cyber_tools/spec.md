@@ -6,12 +6,11 @@ Each tool inspects a URL response or uploaded source and returns findings. None 
 
 Original tools:
 
-- `click_jacking.py` checks X-Frame-Options and CSP frame-ancestors.
-- `sql_inject.py` finds string-built SQL in source only.
 - `session.py` checks Secure, HttpOnly, and SameSite cookie flags.
-- `file_trasnfer.py` checks upload inputs and handlers for type or size limits.
 - `website_element_manipulation.py` checks CSP, script integrity, and CSRF tokens on POST forms.
 - `pen_test.py` checks HTTPS, common security headers, and stack disclosure for CVE matching.
+
+Duplicate checks were removed so the same issue is not scored twice: `click_jacking.py` (covered by `clickjacking.py`), `sql_inject.py` (covered by `injection.py`), and `file_trasnfer.py` (covered by `file_upload_abuse.py`).
 
 Attack-type tools (one file per common web attack category; defensive checks only):
 

@@ -25,14 +25,39 @@ def create_app():
     fastapi = _fastapi_package()
     FastAPI = fastapi.FastAPI
     File = fastapi.File
+    HTTPException = fastapi.HTTPException
     UploadFile = fastapi.UploadFile
+    Response = fastapi.Response
     from pydantic import BaseModel, HttpUrl
 
     from ai.main import files_from_zip, run_scan
+    from ai.model_client import ModelClient
     from ai.tool import list_tools
     from ai.cve_manger import load_summary
+    from report import render_pdf
 
     app = FastAPI(title="Cyber Risk Scan API")
+
+    def _report_format(fmt):
+        value = (fmt or "json").strip().lower()
+        if value not in {"json", "pdf"}:
+            raise HTTPException(status_code=400, detail="format must be json or pdf")
+        return value
+
+    def _pdf_download(report):
+        data = render_pdf(report)
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": 'attachment; filename="cyber-risk-report.pdf"'
+            },
+        )
+
+    def _respond(report, fmt):
+        if _report_format(fmt) == "pdf":
+            return _pdf_download(report)
+        return report
 
     class UrlScan(BaseModel):
         url: HttpUrl
@@ -47,6 +72,7 @@ def create_app():
             "engines": {
                 "zetaris_configured": is_configured(),
                 "meterless": ["scout-local", "hmem-local", "threat-council"],
+                "model_configured": ModelClient().configured(),
             },
         }
 
@@ -59,19 +85,31 @@ def create_app():
         return load_summary()
 
     @app.post("/scan/url")
-    def scan_url(body: UrlScan):
-        return run_scan(
+    def scan_url(body: UrlScan, format: str = "json"):
+        chosen = _report_format(format)
+        report = run_scan(
             {"kind": "url", "url": str(body.url)},
             company_hint=body.company or str(body.url),
         )
+        return _respond(report, chosen)
 
     @app.post("/scan/source")
-    async def scan_source(archive: UploadFile = File(...), company: str | None = None):
+    async def scan_source(
+        archive: UploadFile = File(...),
+        company: str | None = None,
+        format: str = "json",
+    ):
+        chosen = _report_format(format)
         data = await archive.read()
         files = files_from_zip(data)
-        return run_scan(
+        report = run_scan(
             {"kind": "source", "files": files},
             company_hint=company or archive.filename or "uploaded-source",
         )
+        return _respond(report, chosen)
+
+    @app.post("/report/pdf")
+    def download_report(report: dict):
+        return _pdf_download(report)
 
     return app

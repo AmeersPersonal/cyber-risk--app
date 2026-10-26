@@ -7,6 +7,7 @@ from ai.cve_knowledge import agent_context, initialize_cve_knowledge
 from ai.debate_manger import DebateManager
 from ai.meterless_memory import MemoryRetrieval, MemoryStore, format_reinjection
 from ai.meterless_scout import Scout
+from ai.model_client import ModelClient, parse_model_decision
 from ai.tool import ARSENAL, run_tool
 from ai.zetaris_client import ZetarisClient
 
@@ -18,14 +19,24 @@ def _env_int(name, default):
         return default
 
 
+_MODEL_SYSTEM = (
+    "You are one analyst in a defensive security council. "
+    "Choose the next inspection tools from the allowed list only. "
+    "Do not invent tools, exploit steps, payloads, or attack procedures. "
+    "Reply with JSON only: {\"argument\": \"...because...\", \"votes\": [\"tool_name\"]}. "
+    "The argument must say why, using because, since, or therefore. "
+    "Votes must be a subset of the allowed tools."
+)
+
+
 class CouncilAgent:
-    def __init__(self, name, role, preferred_tools):
+    def __init__(self, name, role, preferred_tools, model=None):
         self.name = name
         self.role = role
         self.preferred_tools = [tool for tool in preferred_tools if tool in ARSENAL]
+        self.model = model
 
-    def propose(self, target, memory_text, used_tools, intel, cve_brief="", guidelines=""):
-        available = [name for name in self.preferred_tools if name not in used_tools]
+    def _template(self, target, memory_text, available, intel, cve_brief, guidelines):
         kind = target.get("kind")
         argument = (
             f"{self.name} ({self.role}): for a {kind} target, next we should run "
@@ -42,26 +53,74 @@ class CouncilAgent:
             argument += " Prior findings are high severity; harden session, CSRF, and crypto next."
         if guidelines:
             argument += " Following debate guidelines: no bare agree/disagree; justify every vote."
-        votes = available[:3]
         return {
             "agent": self.name,
             "role": self.role,
             "argument": argument,
-            "votes": votes,
+            "votes": available[:3],
+            "source": "template",
         }
 
+    def _ask_model(self, target, memory_text, available, intel, cve_brief, guidelines):
+        if self.model is None or not self.model.configured():
+            return None
+        allowed = [name for name in ARSENAL if name not in (target.get("_used") or [])]
+        # Prefer this role's remaining tools, but the model may pick any unused arsenal tool.
+        catalog = list(dict.fromkeys(available + allowed))
+        messages = [
+            {"role": "system", "content": _MODEL_SYSTEM},
+            {
+                "role": "user",
+                "content": (
+                    f"Agent: {self.name} ({self.role}).\n"
+                    f"Target kind: {target.get('kind')}.\n"
+                    f"Allowed tools: {', '.join(catalog) or 'none'}.\n"
+                    f"Prior findings: {memory_text[:800] or 'none yet'}.\n"
+                    f"Intel source: {intel.get('source')}.\n"
+                    f"Defense notes: {cve_brief[:400] or 'none'}.\n"
+                    f"Guidelines: {guidelines[:400]}"
+                ),
+            },
+        ]
+        parsed = parse_model_decision(self.model.complete(messages), catalog)
+        if not parsed:
+            return None
+        return {
+            "agent": self.name,
+            "role": self.role,
+            "argument": f"{self.name}: {parsed['argument']}",
+            "votes": parsed["votes"],
+            "source": "model",
+        }
 
-def default_agents():
+    def propose(self, target, memory_text, used_tools, intel, cve_brief="", guidelines=""):
+        available = [name for name in self.preferred_tools if name not in used_tools]
+        asked = self._ask_model(
+            {**target, "_used": used_tools},
+            memory_text,
+            available,
+            intel,
+            cve_brief,
+            guidelines,
+        )
+        if asked and asked.get("votes"):
+            return asked
+        return self._template(target, memory_text, available, intel, cve_brief, guidelines)
+
+
+def default_agents(model=None):
     return [
         CouncilAgent(
             "recon",
             "surface mapper",
-            ["pen_test", "misconfiguration", "supply_chain", "clickjacking", "click_jacking"],
+            ["pen_test", "misconfiguration", "supply_chain", "clickjacking"],
+            model=model,
         ),
         CouncilAgent(
             "attacker_mindset",
             "offensive analyst (defensive checks only)",
-            ["injection", "sql_inject", "xss", "ssrf", "access_control", "business_logic"],
+            ["injection", "xss", "ssrf", "access_control", "business_logic"],
+            model=model,
         ),
         CouncilAgent(
             "defender",
@@ -74,16 +133,19 @@ def default_agents():
                 "account_takeover",
                 "website_element_manipulation",
             ],
+            model=model,
         ),
         CouncilAgent(
             "intel",
             "threat-intel / Zetaris analyst",
             ["pen_test", "supply_chain", "misconfiguration", "denial_of_service", "api_mass_assignment"],
+            model=model,
         ),
         CouncilAgent(
             "upload_forms",
             "content and transfer analyst",
-            ["file_upload_abuse", "file_trasnfer", "website_element_manipulation", "csrf"],
+            ["file_upload_abuse", "website_element_manipulation", "csrf"],
+            model=model,
         ),
     ]
 
@@ -129,10 +191,15 @@ class ThreatCouncil:
         memory=None,
         zetaris=None,
         debate_manager=None,
+        model=None,
         max_rounds=None,
         tools_per_round=None,
     ):
-        self.agents = agents or default_agents()
+        self.model = model if model is not None else ModelClient()
+        self.agents = agents or default_agents(self.model)
+        for agent in self.agents:
+            if getattr(agent, "model", None) is None:
+                agent.model = self.model
         self.scout = scout or Scout()
         self.memory = memory or MemoryStore()
         self.retrieval = MemoryRetrieval(self.memory)
@@ -281,5 +348,6 @@ class ThreatCouncil:
                 "meterless_hmem": "meterless-hmem-local",
                 "council": "parallel-threat-council",
                 "debate_manager": "debate-manager-local",
+                "meterless_model": "meterless-chat" if self.model.configured() else "template",
             },
         }

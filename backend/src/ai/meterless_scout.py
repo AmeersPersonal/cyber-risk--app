@@ -5,11 +5,11 @@ from ai.tool import ARSENAL
 # Intent registry: maps analysis intents to arsenal capabilities.
 INTENT_REGISTRY = {
     "threat.recon": {
-        "tools": ["pen_test", "misconfiguration", "supply_chain", "clickjacking", "click_jacking"],
+        "tools": ["pen_test", "misconfiguration", "supply_chain", "clickjacking"],
         "risk": "low",
     },
     "threat.inject": {
-        "tools": ["injection", "sql_inject", "xss", "ssrf"],
+        "tools": ["injection", "xss", "ssrf"],
         "risk": "medium",
     },
     "threat.auth": {
@@ -23,7 +23,7 @@ INTENT_REGISTRY = {
         "risk": "medium",
     },
     "threat.upload": {
-        "tools": ["file_upload_abuse", "file_trasnfer", "website_element_manipulation"],
+        "tools": ["file_upload_abuse", "website_element_manipulation"],
         "risk": "low",
     },
     "threat.crypto_api": {

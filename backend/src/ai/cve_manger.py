@@ -4,12 +4,13 @@ Does not download or run exploit code.
 """
 
 import json
-import re
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from packaging.version import InvalidVersion, Version
 
 SUMMARY_PATH = Path(__file__).resolve().parent / "summary.json"
 CISA_KEV_URL = (
@@ -231,32 +232,131 @@ def cross_check_summary(items):
     }
 
 
-def _tokens(values):
-    tokens = set()
-    for value in values:
-        for token in re.findall(r"[a-zA-Z][a-zA-Z0-9_\-]{2,}", str(value).lower()):
-            tokens.add(token)
-    return tokens
+def _norm_ecosystem(value):
+    text = str(value or "").strip().lower()
+    if text in {"pypi", "pip"}:
+        return "pypi"
+    if text in {"npm", "node"}:
+        return "npm"
+    if text in {"go", "golang"}:
+        return "go"
+    return text
 
 
-def match_cves(items, fingerprints):
-    marks = _tokens(fingerprints)
-    if not marks:
+def _norm_name(name, ecosystem):
+    text = str(name or "").strip()
+    if ecosystem == "pypi":
+        return text.lower().replace("_", "-")
+    return text
+
+
+def _parse_version(value):
+    text = str(value or "").strip()
+    if text in {"", "0"}:
+        return Version("0")
+    if text[0] in "vV":
+        text = text[1:]
+    try:
+        return Version(text)
+    except InvalidVersion:
+        return None
+
+
+def _cmp_version(left, right):
+    parsed_left = _parse_version(left)
+    parsed_right = _parse_version(right)
+    if parsed_left is None or parsed_right is None:
+        return None
+    return (parsed_left > parsed_right) - (parsed_left < parsed_right)
+
+
+def _events_include(version, events):
+    affected = False
+    saw = False
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        if "introduced" in event:
+            saw = True
+            compared = _cmp_version(version, event.get("introduced"))
+            if compared is not None and compared >= 0:
+                affected = True
+        elif "fixed" in event:
+            saw = True
+            compared = _cmp_version(version, event.get("fixed"))
+            if compared is not None and compared >= 0:
+                affected = False
+        elif "last_affected" in event:
+            saw = True
+            compared = _cmp_version(version, event.get("last_affected"))
+            if compared is not None and compared > 0:
+                affected = False
+        elif "limit" in event:
+            saw = True
+            compared = _cmp_version(version, event.get("limit"))
+            if compared is not None and compared >= 0:
+                affected = False
+    return affected if saw else False
+
+
+def package_is_affected(item, package):
+    """True when this package version sits inside the CVE's affected range."""
+    ecosystem = _norm_ecosystem(package.get("ecosystem"))
+    name = _norm_name(package.get("name"), ecosystem)
+    version = str(package.get("version") or "")
+    if not name or not version:
+        return False
+    for entry in item.get("affected") or []:
+        if not isinstance(entry, dict):
+            continue
+        pkg = entry.get("package") or {}
+        entry_name = _norm_name(pkg.get("name"), ecosystem)
+        entry_eco = _norm_ecosystem(pkg.get("ecosystem") or item.get("vendor") or "")
+        if not entry_name or entry_name != name:
+            continue
+        if entry_eco and entry_eco != ecosystem:
+            continue
+        listed = {str(value).lstrip("vV") for value in entry.get("versions") or []}
+        if version in listed:
+            return True
+        for rng in entry.get("ranges") or []:
+            if not isinstance(rng, dict):
+                continue
+            if rng.get("type") not in {None, "", "ECOSYSTEM", "SEMVER"}:
+                continue
+            if _events_include(version, rng.get("events") or []):
+                return True
+    return False
+
+
+def match_cves(items, packages):
+    """Keep a CVE only when a parsed package version is inside its affected range.
+
+    Name overlap is not enough. Fingerprint strings are ignored.
+    """
+    if not packages or isinstance(packages[0], str):
         return []
-
-    matched = []
-    for item in items:
-        haystack = _tokens(
-            [
-                item.get("vendor", ""),
-                item.get("product", ""),
-                item.get("name", ""),
-                item.get("description", ""),
-            ]
-        )
-        if marks & haystack:
-            matched.append(item)
-    return matched
+    found = []
+    seen = set()
+    for item in items or []:
+        cve_id = item.get("cve_id") or ""
+        if not cve_id or cve_id in seen:
+            continue
+        for package in packages:
+            if not isinstance(package, dict):
+                continue
+            if not package_is_affected(item, package):
+                continue
+            matched = dict(item)
+            matched["version_confirmed"] = True
+            matched["matched_package"] = package.get("name")
+            matched["matched_version"] = package.get("version")
+            matched["matched_ecosystem"] = package.get("ecosystem")
+            matched["kev"] = "cisa_kev" in (matched.get("sources") or [])
+            found.append(matched)
+            seen.add(cve_id)
+            break
+    return found
 
 
 def fetch_cisa_kev(opener, limit=25):
@@ -315,38 +415,143 @@ def fetch_osv_for_fingerprints(opener, fingerprints, limit=25):
     return items[:limit]
 
 
-def fetch_latest_cves(path=None, opener=None, fingerprints=None, limit=25):
-    """Fetch from CISA KEV, NIST NVD, and OSV; merge and cross-check by CVE id."""
+def fetch_kev_ids(opener):
+    payload = _http_json(CISA_KEV_URL, opener)
+    return {
+        entry.get("cveID")
+        for entry in (payload.get("vulnerabilities") or [])
+        if entry.get("cveID")
+    }
+
+
+def query_osv_version(opener, package, limit=15):
+    body = json.dumps(
+        {
+            "package": {"name": package["name"], "ecosystem": package["ecosystem"]},
+            "version": package["version"],
+        }
+    ).encode("utf-8")
+    payload = _http_json(
+        OSV_QUERY_URL,
+        opener,
+        method="POST",
+        body=body,
+        headers={
+            "User-Agent": "CyberRiskCouncil/1.0",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    items = []
+    for entry in list(payload.get("vulns") or [])[:limit]:
+        if isinstance(entry, dict):
+            items.append(_osv_item(entry, package))
+    return items
+
+
+def _numeric_cvss(entry):
+    for row in entry.get("severity") or []:
+        score = row.get("score")
+        if isinstance(score, (int, float)):
+            return float(score)
+    specific = entry.get("database_specific") or {}
+    for key in ("cvss_score", "cvss"):
+        score = specific.get(key)
+        if isinstance(score, (int, float)):
+            return float(score)
+    return None
+
+
+def _osv_item(entry, package):
+    aliases = entry.get("aliases") or []
+    cve_id = next((item for item in aliases if str(item).startswith("CVE-")), "")
+    if not cve_id:
+        cve_id = entry.get("id", "")
+    affected = []
+    for row in entry.get("affected") or []:
+        if not isinstance(row, dict):
+            continue
+        affected.append(
+            {
+                "package": (row.get("package") or {}),
+                "ranges": row.get("ranges") or [],
+                "versions": row.get("versions") or [],
+            }
+        )
+    if not affected:
+        affected = [
+            {
+                "package": {"name": package["name"], "ecosystem": package["ecosystem"]},
+                "ranges": [],
+                "versions": [package["version"]],
+            }
+        ]
+    return {
+        "cve_id": cve_id,
+        "vendor": package.get("ecosystem", ""),
+        "product": package.get("name", ""),
+        "name": entry.get("id", cve_id),
+        "date_added": (entry.get("published") or "")[:10],
+        "description": (entry.get("summary") or "")[:500],
+        "cvss_score": _numeric_cvss(entry),
+        "severity": "",
+        "sources": ["osv"],
+        "affected": affected,
+    }
+
+
+def fetch_latest_cves(path=None, opener=None, fingerprints=None, packages=None, limit=25):
+    """Query OSV for exact package versions and badge hits that are also in CISA KEV.
+
+    A CVE is stored only when OSV returns it for that version. Bulk name overlap
+    against NVD or KEV is not used. `fingerprints` is accepted and ignored.
+    """
+    del fingerprints
     opener = opener or urllib.request.urlopen
-    groups = []
-    sources_ok = []
+    packages = [item for item in (packages or []) if isinstance(item, dict)][:15]
     errors = {}
+    sources_ok = []
+    kev = set()
+    try:
+        kev = fetch_kev_ids(opener)
+        sources_ok.append("cisa_kev")
+    except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError, KeyError) as exc:
+        errors["cisa_kev"] = str(exc)
 
-    for name, loader in (
-        ("cisa_kev", lambda: fetch_cisa_kev(opener, limit=limit)),
-        ("nist_nvd", lambda: fetch_nist_nvd(opener, limit=limit)),
-        ("osv", lambda: fetch_osv_for_fingerprints(opener, fingerprints or [], limit=limit)),
-    ):
+    groups = []
+    if packages:
         try:
-            groups.append(loader())
-            sources_ok.append(name)
+            osv_items = []
+            for package in packages:
+                try:
+                    osv_items.extend(query_osv_version(opener, package, limit=limit))
+                except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError, KeyError) as exc:
+                    errors[f"osv:{package.get('name')}"] = str(exc)
+            if osv_items or "osv" not in errors:
+                sources_ok.append("osv")
+            groups.append(osv_items)
         except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError, KeyError) as exc:
-            errors[name] = str(exc)
+            errors["osv"] = str(exc)
 
-    if not groups:
+    if not groups and not sources_ok:
         cached = load_summary(path)
         cached.setdefault("matched", [])
         cached.setdefault("errors", errors)
         return cached
 
     items = _merge_items(groups)
+    for item in items:
+        if item.get("cve_id") in kev and "cisa_kev" not in (item.get("sources") or []):
+            item.setdefault("sources", []).append("cisa_kev")
+            item["kev"] = True
     summary = {
         "fetched_at": _now(),
-        "source": "multi",
+        "source": "version_matched",
         "sources": sources_ok,
         "errors": errors,
         "count": len(items),
         "items": items,
+        "packages": packages,
         "matched": [],
         "cross_check": cross_check_summary(items),
     }

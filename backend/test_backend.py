@@ -1,5 +1,6 @@
 import importlib.util
 import io
+import json
 import sys
 import unittest
 import zipfile
@@ -22,11 +23,13 @@ from ai.cve_knowledge import (
 )
 from ai.debate_manger import DebateManager
 from ai.main import files_from_zip, run_scan
+from ai.manifests import packages_from_files
 from ai.meterless_scout import Scout
+from ai.model_client import parse_model_decision
 from ai.tool import ARSENAL, list_tools, run_tool
 from ai.zetaris_client import ZetarisClient, assert_readonly_sql
-from cyber_tools import access_control, click_jacking, session, sql_inject, xss
-from report import after_action_report, build_report
+from cyber_tools import access_control, clickjacking, injection, session, xss
+from report import after_action_report, build_report, render_pdf
 
 ATTACK_TYPE_TOOLS = {
     "injection",
@@ -54,14 +57,25 @@ def _load_api_module():
     return module
 
 
+def _api_client():
+    here = str(SRC)
+    if here in sys.path:
+        sys.path.remove(here)
+    sys.modules.pop("fastapi", None)
+    try:
+        from fastapi.testclient import TestClient
+    except ImportError:
+        sys.path.insert(0, here)
+        raise unittest.SkipTest("fastapi is not installed")
+    sys.path.insert(0, here)
+    return TestClient(_load_api_module().create_app())
+
+
 class ArsenalTests(unittest.TestCase):
     def test_preloaded_tools_are_registered(self):
         names = {item["name"] for item in list_tools()}
         expected = {
-            "click_jacking",
-            "sql_inject",
             "session",
-            "file_trasnfer",
             "website_element_manipulation",
             "pen_test",
         } | ATTACK_TYPE_TOOLS
@@ -75,8 +89,8 @@ class ArsenalTests(unittest.TestCase):
 
 
 class ToolCheckTests(unittest.TestCase):
-    def test_sql_inject_flags_string_built_sql(self):
-        result = sql_inject.run(
+    def test_injection_flags_string_built_sql(self):
+        result = injection.run(
             {
                 "kind": "source",
                 "files": {
@@ -87,8 +101,8 @@ class ToolCheckTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertEqual(result["findings"][0]["severity"], "high")
 
-    def test_sql_inject_passes_parameterized_sql(self):
-        result = sql_inject.run(
+    def test_injection_passes_parameterized_sql(self):
+        result = injection.run(
             {
                 "kind": "source",
                 "files": {"app.py": "cursor.execute('SELECT * FROM users WHERE id=?', (user_id,))"},
@@ -96,11 +110,11 @@ class ToolCheckTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "pass")
 
-    def test_click_jacking_requires_frame_header(self):
-        missing = click_jacking.run(
+    def test_clickjacking_requires_frame_header(self):
+        missing = clickjacking.run(
             {"kind": "url", "url": "https://example.test", "http": {"headers": {}, "body": ""}}
         )
-        present = click_jacking.run(
+        present = clickjacking.run(
             {
                 "kind": "url",
                 "url": "https://example.test",
@@ -161,12 +175,43 @@ class ScanAndCveTests(unittest.TestCase):
                 "items": [
                     {
                         "cve_id": "CVE-0000-0001",
-                        "vendor": "Django",
-                        "product": "Django",
+                        "vendor": "PyPI",
+                        "product": "django",
                         "name": "Example",
                         "date_added": "2024-01-01",
                         "description": "A Django issue",
-                    }
+                        "cvss_score": 7.5,
+                        "sources": ["osv"],
+                        "affected": [
+                            {
+                                "package": {"name": "django", "ecosystem": "PyPI"},
+                                "ranges": [
+                                    {
+                                        "type": "ECOSYSTEM",
+                                        "events": [{"introduced": "0"}, {"fixed": "3.2.1"}],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "cve_id": "CVE-0000-0099",
+                        "vendor": "PyPI",
+                        "product": "django",
+                        "description": "django is mentioned but this build is already fixed",
+                        "sources": ["osv"],
+                        "affected": [
+                            {
+                                "package": {"name": "django", "ecosystem": "PyPI"},
+                                "ranges": [
+                                    {
+                                        "type": "ECOSYSTEM",
+                                        "events": [{"introduced": "1.0"}, {"fixed": "2.0"}],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
                 ],
             },
             council=council,
@@ -178,6 +223,9 @@ class ScanAndCveTests(unittest.TestCase):
         self.assertGreaterEqual(report["summary"]["council_rounds"], 1)
         self.assertEqual(report["council"]["engines"]["meterless_scout"], "meterless-scout-local")
         self.assertEqual(report["summary"]["matched_cve_count"], 1)
+        self.assertEqual(report["cves"]["matched"][0]["cve_id"], "CVE-0000-0001")
+        self.assertTrue(report["cves"]["matched"][0]["version_confirmed"])
+        self.assertEqual(report["summary"]["score_standard"], "confirmed_cvss")
         self.assertTrue(any(item["severity"] == "high" for item in report["findings"]))
         self.assertIn("nist_score", report["summary"])
         self.assertGreaterEqual(report["summary"]["nist_score"], 1)
@@ -201,8 +249,32 @@ class ScanAndCveTests(unittest.TestCase):
             }
         )
         self.assertEqual(items[0]["cve_id"], "CVE-1")
-        matched = cve_manger.match_cves(items, ["nginx/1.18"])
+        items[0]["affected"] = [
+            {
+                "package": {"name": "nginx", "ecosystem": "PyPI"},
+                "ranges": [
+                    {"type": "ECOSYSTEM", "events": [{"introduced": "1.18.0"}, {"fixed": "1.18.1"}]}
+                ],
+            }
+        ]
+        matched = cve_manger.match_cves(
+            items, [{"name": "nginx", "version": "1.18.0", "ecosystem": "PyPI"}]
+        )
         self.assertEqual(matched[0]["cve_id"], "CVE-1")
+        self.assertTrue(matched[0]["version_confirmed"])
+        self.assertEqual(
+            cve_manger.match_cves(
+                items, [{"name": "nginx", "version": "1.25.0", "ecosystem": "PyPI"}]
+            ),
+            [],
+        )
+        self.assertEqual(
+            cve_manger.match_cves(
+                [{"cve_id": "CVE-2", "product": "nginx", "description": "nginx banner"}],
+                [{"name": "nginx", "version": "1.18.0", "ecosystem": "PyPI"}],
+            ),
+            [],
+        )
 
     def test_cross_check_merges_nist_and_cisa(self):
         merged = cve_manger._merge_items(
@@ -294,9 +366,70 @@ class ScanAndCveTests(unittest.TestCase):
         self.assertIn("sql_inject", report["nist"]["tools_used"])
         self.assertEqual(report["nist"]["failed"][0]["tool"], "sql_inject")
         self.assertEqual(report["nist"]["passed"][0]["tool"], "session")
-        self.assertIn("NIST/CVSS-aligned risk score", report["narrative"])
+        self.assertIn("This score is a heuristic", report["narrative"])
         self.assertTrue(report["after_action_report"]["next_steps"])
         self.assertEqual(report["cves"]["tried"][0]["cve_id"], "CVE-2024-1")
+
+    def test_render_pdf_is_a_downloadable_document(self):
+        report = build_report(
+            [
+                {
+                    "tool": "sql_inject",
+                    "status": "fail",
+                    "findings": [
+                        {
+                            "tool": "sql_inject",
+                            "severity": "high",
+                            "title": "Unsafe (SQL)",
+                            "detail": "Use bound parameters.",
+                            "evidence": "app.py:1",
+                        }
+                    ],
+                }
+            ],
+            cves={
+                "matched": [
+                    {
+                        "cve_id": "CVE-2024-1",
+                        "sources": ["cisa_kev"],
+                        "cvss_score": 8.1,
+                        "description": "Example issue",
+                    }
+                ]
+            },
+        )
+        report["target"] = {"kind": "url", "url": "https://example.com", "company": "Example"}
+        pdf = render_pdf(report)
+        self.assertTrue(pdf.startswith(b"%PDF-1.4"))
+        self.assertTrue(pdf.rstrip().endswith(b"%%EOF"))
+        self.assertIn(b"Cyber Risk Scan Report", pdf)
+        self.assertIn(br"Unsafe \(SQL\)", pdf)
+        self.assertIn(b"CVE-2024-1", pdf)
+        self.assertIn(b"After-action report", pdf)
+        self.assertIn(b"/Type /Page", pdf)
+        self.assertIn(b"Page 1 of", pdf)
+
+    def test_render_pdf_paginates_long_reports(self):
+        findings = [
+            {
+                "tool": "xss",
+                "severity": "medium",
+                "title": f"Finding {index}",
+                "detail": "Review this input path and encode output before rendering.",
+                "evidence": f"file.py:{index}",
+            }
+            for index in range(40)
+        ]
+        pdf = render_pdf(
+            {
+                "summary": {"nist_score": 4, "nist_rating": "Medium", "finding_count": 40},
+                "findings": findings,
+                "narrative": "Long report.",
+                "after_action_report": {"next_steps": []},
+            }
+        )
+        self.assertNotIn(b"/Count 1", pdf)
+        self.assertGreaterEqual(pdf.count(b"/Type /Page"), 2)
 
     def test_files_from_zip_reads_source_only(self):
         buffer = io.BytesIO()
@@ -328,7 +461,61 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(body["status"], "ok")
         self.assertIn("zetaris_configured", body["engines"])
         self.assertIn("meterless", body["engines"])
-        self.assertEqual(len(tools.json()["tools"]), 21)
+        self.assertEqual(len(tools.json()["tools"]), 18)
+        self.assertEqual(client.get("/").status_code, 404)
+
+    def test_report_pdf_route_returns_attachment(self):
+        client = _api_client()
+        response = client.post(
+            "/report/pdf",
+            json={
+                "summary": {
+                    "nist_score": 3,
+                    "nist_rating": "Low",
+                    "finding_count": 0,
+                    "severity": {},
+                },
+                "narrative": "No material findings.",
+                "findings": [],
+                "after_action_report": {"summary": "Keep monitoring.", "next_steps": []},
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/pdf")
+        disposition = response.headers["content-disposition"]
+        self.assertIn("attachment", disposition)
+        self.assertIn("cyber-risk-report.pdf", disposition)
+        self.assertTrue(response.content.startswith(b"%PDF-"))
+
+    def test_scan_url_format_pdf_downloads_report(self):
+        from ai import main as scan_main
+
+        sample = {
+            "summary": {"nist_score": 2, "nist_rating": "Low", "finding_count": 0, "severity": {}},
+            "narrative": "Patched scan.",
+            "findings": [],
+            "nist": {},
+            "cves": {},
+            "after_action_report": {"next_steps": []},
+            "target": {"kind": "url", "url": "https://example.com", "company": "Example"},
+        }
+        original = scan_main.run_scan
+        scan_main.run_scan = lambda *args, **kwargs: sample
+        try:
+            client = _api_client()
+            pdf = client.post("/scan/url?format=pdf", json={"url": "https://example.com"})
+            kept = client.post("/scan/url", json={"url": "https://example.com"})
+            rejected = client.post("/scan/url?format=xml", json={"url": "https://example.com"})
+        finally:
+            scan_main.run_scan = original
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf.headers["content-type"], "application/pdf")
+        self.assertIn("attachment", pdf.headers["content-disposition"])
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))
+        self.assertIn(b"Patched scan.", pdf.content)
+        self.assertEqual(kept.status_code, 200)
+        self.assertEqual(kept.json()["narrative"], "Patched scan.")
+        self.assertEqual(rejected.status_code, 400)
 
 
 class CveKnowledgeTests(unittest.TestCase):
@@ -462,6 +649,146 @@ class DebateManagerTests(unittest.TestCase):
         self.assertIn("reasoning", prompt.lower())
         sections = manager.load_guidelines()
         self.assertGreaterEqual(len(sections), 3)
+
+
+class VersionMatchAndModelTests(unittest.TestCase):
+    def test_manifests_keep_exact_versions_only(self):
+        packages = packages_from_files(
+            {
+                "requirements.txt": "django==3.2.0\nrequests>=2.0\n",
+                "pkg/package.json": json.dumps(
+                    {"dependencies": {"left-pad": "1.2.3", "lodash": "^4.17.21"}}
+                ),
+                "go.mod": "module example.com/demo\n\ngo 1.22\n\nrequire github.com/gin-gonic/gin v1.9.1\n",
+            }
+        )
+        found = {(item["ecosystem"], item["name"], item["version"]) for item in packages}
+        self.assertIn(("PyPI", "django", "3.2.0"), found)
+        self.assertIn(("npm", "left-pad", "1.2.3"), found)
+        self.assertIn(("Go", "github.com/gin-gonic/gin", "1.9.1"), found)
+        self.assertNotIn(("PyPI", "requests", "2.0"), found)
+        self.assertFalse(any(item["name"] == "lodash" for item in packages))
+
+    def test_lockfile_versions_replace_package_json_ranges(self):
+        packages = packages_from_files(
+            {
+                "package.json": json.dumps({"dependencies": {"left-pad": "1.0.0"}}),
+                "package-lock.json": json.dumps(
+                    {"packages": {"node_modules/lodash": {"version": "4.17.20"}}}
+                ),
+            }
+        )
+        names = {item["name"] for item in packages}
+        self.assertIn("lodash", names)
+        self.assertNotIn("left-pad", names)
+
+    def test_duplicate_findings_count_once(self):
+        finding = {
+            "tool": "injection",
+            "severity": "high",
+            "title": "Unsafe SQL",
+            "detail": "Use bound parameters.",
+            "evidence": "app.py:1",
+        }
+        report = build_report(
+            [
+                {"tool": "injection", "status": "fail", "findings": [finding]},
+                {"tool": "xss", "status": "fail", "findings": [dict(finding)]},
+            ]
+        )
+        self.assertEqual(report["summary"]["finding_count"], 1)
+        self.assertEqual(report["summary"]["severity"]["high"], 1)
+
+    def test_model_decision_drops_unknown_tools(self):
+        parsed = parse_model_decision(
+            '```json\n{"argument":"Check injection because the handler builds a query.","votes":["injection","not_a_tool"]}\n```',
+            ["injection", "xss"],
+        )
+        self.assertEqual(parsed["votes"], ["injection"])
+        self.assertNotIn("not_a_tool", parsed["votes"])
+
+    def test_council_uses_model_votes_when_configured(self):
+        class FakeModel:
+            def configured(self):
+                return True
+
+            def complete(self, messages):
+                self.last = messages
+                return json.dumps(
+                    {
+                        "argument": "Run injection because the source may concatenate queries.",
+                        "votes": ["injection", "not_a_tool", "xss"],
+                    }
+                )
+
+        model = FakeModel()
+        council = ThreatCouncil(model=model, max_rounds=1, tools_per_round=2)
+        session = council.analyze(
+            {"kind": "source", "files": {"app.py": "print('ok')"}},
+            company_hint="Acme",
+        )
+        votes = [vote for proposal in session["debate"][0]["proposals"] for vote in proposal["votes"]]
+        self.assertNotIn("not_a_tool", votes)
+        self.assertTrue(all(proposal.get("source") == "model" for proposal in session["debate"][0]["proposals"]))
+        self.assertEqual(session["engines"]["meterless_model"], "meterless-chat")
+        self.assertIn("do not invent tools", model.last[0]["content"].lower())
+
+    def test_version_query_badges_kev(self):
+        class Body:
+            def __init__(self, payload):
+                self.payload = json.dumps(payload).encode("utf-8")
+
+            def read(self):
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def opener(request, timeout=20):
+            url = request.full_url
+            if "known_exploited" in url:
+                return Body({"vulnerabilities": [{"cveID": "CVE-2024-1111"}]})
+            return Body(
+                {
+                    "vulns": [
+                        {
+                            "id": "GHSA-1",
+                            "aliases": ["CVE-2024-1111"],
+                            "summary": "Example django issue",
+                            "affected": [
+                                {
+                                    "package": {"name": "Django", "ecosystem": "PyPI"},
+                                    "ranges": [
+                                        {
+                                            "type": "ECOSYSTEM",
+                                            "events": [{"introduced": "0"}, {"fixed": "3.2.1"}],
+                                        }
+                                    ],
+                                }
+                            ],
+                            "database_specific": {"cvss_score": 9.8},
+                        }
+                    ]
+                }
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = cve_manger.fetch_latest_cves(
+                path=Path(tmp) / "summary.json",
+                opener=opener,
+                packages=[{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
+            )
+        matched = cve_manger.match_cves(
+            summary["items"],
+            [{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
+        )
+        self.assertEqual(matched[0]["cve_id"], "CVE-2024-1111")
+        self.assertIn("cisa_kev", matched[0]["sources"])
+        self.assertTrue(matched[0]["kev"])
+        self.assertEqual(matched[0]["cvss_score"], 9.8)
 
 
 if __name__ == "__main__":

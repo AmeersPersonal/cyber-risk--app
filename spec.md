@@ -18,3 +18,11 @@ Ignored paths:
 - Local threat-analysis artifacts: logs, intel cache, vector stores, packet captures, and raw data
 
 `test_gitignore.py` checks that those paths are ignored and that source files stay trackable.
+
+## future-implementations.md
+
+Recorded two items that are not built yet: confirming a target is allowed before a scan and refusing private addresses, and keeping any future sandbox inspect-only.
+
+## frontend
+
+Removed the temporary scan page (`frontend/`) and the backend routes that served it. A separate frontend will be added later. The scan API remains.
