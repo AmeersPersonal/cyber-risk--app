@@ -30,9 +30,9 @@ def create_app():
     Response = fastapi.Response
     from pydantic import BaseModel, HttpUrl
 
-    root = Path(__file__).resolve().parents[2]
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
+    src = Path(__file__).resolve().parent
+    if str(src) not in sys.path:
+        sys.path.insert(0, str(src))
     import safety
 
     from ai.main import files_from_zip, run_scan

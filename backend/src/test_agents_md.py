@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-AGENTS = Path(__file__).resolve().parent / "AGENTS.md"
+AGENTS = Path(__file__).resolve().parents[2] / "AGENTS.md"
 
 
 class AgentsProjectSectionTests(unittest.TestCase):

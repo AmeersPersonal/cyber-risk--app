@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-README = Path(__file__).resolve().parent / "README.md"
+README = Path(__file__).resolve().parents[2] / "README.md"
 
 
 class ReadmeTests(unittest.TestCase):
