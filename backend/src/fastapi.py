@@ -343,7 +343,12 @@ def create_app():
             raise HTTPException(status_code=422, detail="No supported source files were found in the repository.")
 
         report = run_scan(
-            {"kind": "source", "files": files},
+            {
+                "kind": "source",
+                "files": files,
+                "ownership_checked": True,
+                "ownership_assumed": False,
+            },
             company_hint=f"{owner}/{repository}",
         )
         report["target"]["url"] = f"https://github.com/{owner}/{repository}"

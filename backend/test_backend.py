@@ -1098,6 +1098,48 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(captured["company_hint"], "repo-owner/project")
         self.assertEqual(response.json()["target"]["url"], "https://github.com/repo-owner/project")
 
+    def test_github_scan_treats_verified_owner_as_ownership_proof(self):
+        module = _load_api_module()
+        import safety
+        from ai import main as scan_main
+
+        files = {"project/app.py": "# Copyright (c) 2024 Jane Doe\nprint('hi')\n"}
+        with self.assertRaises(safety.UnsafeTarget):
+            safety.gate_before_agents(
+                {"kind": "source", "files": dict(files)}, claimed_owner="janedoe/project"
+            )
+
+        archive_buffer = io.BytesIO()
+        with zipfile.ZipFile(archive_buffer, "w") as archive:
+            for name, text in files.items():
+                archive.writestr(name, text)
+        captured = {}
+
+        def github_json(path, token):
+            if path == "/user":
+                return {"login": "janedoe"}
+            return {"owner": {"login": "janedoe"}}
+
+        def gated_scan(target, company_hint=""):
+            captured["target"] = target
+            captured["gate"] = safety.gate_before_agents(target, claimed_owner=company_hint)
+            return {"target": {"kind": "source"}, "summary": {}}
+
+        with patch.object(module, "_github_api_json", side_effect=github_json), patch.object(
+            module,
+            "_download_github_archive",
+            return_value=archive_buffer.getvalue(),
+        ), patch.object(scan_main, "run_scan", side_effect=gated_scan):
+            response = _api_client(module).post(
+                "/scan/github",
+                json={"repository": "janedoe/project"},
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured["gate"], {"skipped": True})
+        self.assertFalse(captured["target"]["ownership_assumed"])
+
 
 class CveKnowledgeTests(unittest.TestCase):
     def test_initialization_writes_common_list_and_zero_day_files(self):
