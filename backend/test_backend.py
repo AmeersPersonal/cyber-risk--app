@@ -11,6 +11,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 import tempfile
+from unittest.mock import patch
 
 from ai import cve_manger
 from ai.council import ThreatCouncil
@@ -113,7 +114,7 @@ def _test_client(app):
     return TestClient(app)
 
 
-def _api_client():
+def _api_client(module=None):
     here = str(SRC)
     if here in sys.path:
         sys.path.remove(here)
@@ -124,7 +125,7 @@ def _api_client():
         sys.path.insert(0, here)
         raise unittest.SkipTest("fastapi is not installed")
     sys.path.insert(0, here)
-    return TestClient(_load_api_module().create_app())
+    return TestClient((module or _load_api_module()).create_app())
 
 
 class ArsenalTests(unittest.TestCase):
@@ -1027,6 +1028,76 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(refused.status_code, 403)
         self.assertEqual(bad_token.status_code, 403)
 
+    def test_github_scan_requires_token_and_github_repository(self):
+        client = _api_client()
+        missing_token = client.post("/scan/github", json={"repository": "owner/repo"})
+        invalid_host = client.post(
+            "/scan/github",
+            json={"repository": "https://example.com/owner/repo"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+        self.assertEqual(missing_token.status_code, 401)
+        self.assertEqual(invalid_host.status_code, 400)
+
+    def test_github_scan_rejects_repository_not_owned_by_token_user(self):
+        module = _load_api_module()
+        def github_json(path, token):
+            self.assertEqual(token, "test-token")
+            if path == "/user":
+                return {"login": "another-user"}
+            return {"owner": {"login": "repo-owner"}}
+
+        with patch.object(module, "_github_api_json", side_effect=github_json), patch.object(
+            module,
+            "_download_github_archive",
+            side_effect=AssertionError("non-owner must not download the repository"),
+        ):
+            response = _api_client(module).post(
+                "/scan/github",
+                json={"repository": "repo-owner/private-repo"},
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("owned", response.json()["detail"])
+
+    def test_github_scan_sends_owned_archive_to_source_scanner(self):
+        module = _load_api_module()
+        from ai import main as scan_main
+
+        archive_buffer = io.BytesIO()
+        with zipfile.ZipFile(archive_buffer, "w") as archive:
+            archive.writestr("project/src/app.py", "print('source')")
+        captured = {}
+
+        def github_json(path, token):
+            self.assertEqual(token, "test-token")
+            if path == "/user":
+                return {"login": "repo-owner"}
+            return {"owner": {"login": "Repo-Owner"}}
+
+        def fake_scan(target, company_hint=""):
+            captured["target"] = target
+            captured["company_hint"] = company_hint
+            return {"target": {"kind": "source"}, "summary": {}}
+
+        with patch.object(module, "_github_api_json", side_effect=github_json), patch.object(
+            module,
+            "_download_github_archive",
+            return_value=archive_buffer.getvalue(),
+        ), patch.object(scan_main, "run_scan", side_effect=fake_scan):
+            response = _api_client(module).post(
+                "/scan/github",
+                json={"repository": "https://github.com/repo-owner/project.git"},
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured["target"]["kind"], "source")
+        self.assertEqual(captured["target"]["files"], {"project/src/app.py": "print('source')"})
+        self.assertEqual(captured["company_hint"], "repo-owner/project")
+        self.assertEqual(response.json()["target"]["url"], "https://github.com/repo-owner/project")
+
 
 class CveKnowledgeTests(unittest.TestCase):
     def test_initialization_writes_common_list_and_zero_day_files(self):
@@ -1071,6 +1142,216 @@ class CveKnowledgeTests(unittest.TestCase):
         self.assertTrue(context["text"])
 
 
+class ZetarisCveIntegrationTests(unittest.TestCase):
+    def _make_client(self, responses):
+        """Build a ZetarisClient with a fake opener that returns canned responses."""
+        call_log = []
+
+        def opener(request, timeout=20):
+            call_log.append(json.loads(request.data.decode("utf-8"))["sql"])
+            body = responses.pop(0) if responses else {}
+            raw = json.dumps(body).encode("utf-8")
+
+            class Resp:
+                def read(self):
+                    return raw
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    return False
+
+            return Resp()
+
+        client = ZetarisClient(
+            cfg={
+                "base_url": "http://zetaris.test",
+                "query_path": "/api/proxy/sql-editor/sqls/run-query",
+                "org_id": "org-1",
+                "api_key": "key-1",
+                "query_limit": 100,
+                "threat_sql": "",
+            },
+            opener=opener,
+        )
+        return client, call_log
+
+    def test_write_sql_sends_statement(self):
+        client, log = self._make_client([{"ok": True}])
+        result = client.write_sql("CREATE TABLE test (id INT)")
+        self.assertTrue(result["ok"])
+        self.assertEqual(log[0], "CREATE TABLE test (id INT)")
+
+    def test_write_sql_offline_when_not_configured(self):
+        client = ZetarisClient(
+            cfg={"base_url": "http://x", "query_path": "/api/proxy/sql-editor/sqls/run-query", "org_id": "", "api_key": "", "query_limit": 1000, "threat_sql": ""}
+        )
+        result = client.write_sql("CREATE TABLE test (id INT)")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["mode"], "offline")
+
+    def test_fetch_cves_from_zetaris_parses_rows(self):
+        rows = [
+            {
+                "cve_id": "CVE-2024-1234",
+                "vendor": "PyPI",
+                "product": "django",
+                "name": "CVE-2024-1234",
+                "date_added": "2024-06-01",
+                "description": "A django issue",
+                "cvss_score": "9.1",
+                "severity": "critical",
+                "sources": "nist_nvd,cisa_kev",
+            }
+        ]
+        client, _ = self._make_client([{"headers": list(rows[0].keys()), "data": rows}])
+        items, ok = cve_manger.fetch_cves_from_zetaris(client, limit=10)
+        self.assertTrue(ok)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["cve_id"], "CVE-2024-1234")
+        self.assertEqual(items[0]["cvss_score"], 9.1)
+        self.assertEqual(set(items[0]["sources"]), {"nist_nvd", "cisa_kev"})
+
+    def test_fetch_cves_from_zetaris_returns_empty_on_failure(self):
+        client = ZetarisClient(
+            cfg={"base_url": "http://x", "query_path": "/api/proxy/sql-editor/sqls/run-query", "org_id": "", "api_key": "", "query_limit": 1000, "threat_sql": ""}
+        )
+        items, ok = cve_manger.fetch_cves_from_zetaris(client, limit=10)
+        self.assertFalse(ok)
+        self.assertEqual(items, [])
+
+    def test_fetch_latest_cves_prefers_zetaris(self):
+        zetaris_rows = [
+            {
+                "cve_id": "CVE-Z-001",
+                "vendor": "PyPI",
+                "product": "flask",
+                "name": "CVE-Z-001",
+                "date_added": "2024-01-01",
+                "description": "Zetaris-loaded CVE",
+                "cvss_score": "7.5",
+                "severity": "high",
+                "sources": "zetaris",
+            }
+        ]
+        client, _ = self._make_client(
+            [{"headers": list(zetaris_rows[0].keys()), "data": zetaris_rows}]
+        )
+        summary = cve_manger.fetch_latest_cves(
+            packages=[],
+            zetaris_client=client,
+        )
+        self.assertEqual(summary["source"], "zetaris")
+        self.assertIn("zetaris", summary["sources"])
+        self.assertEqual(summary["items"][0]["cve_id"], "CVE-Z-001")
+
+    def test_zetaris_path_enriches_with_osv_affected_ranges(self):
+        """Zetaris catalog + OSV version query = items with affected ranges."""
+        zetaris_rows = [
+            {
+                "cve_id": "CVE-2024-1111",
+                "vendor": "PyPI",
+                "product": "django",
+                "name": "CVE-2024-1111",
+                "date_added": "2024-06-01",
+                "description": "A django issue",
+                "cvss_score": "9.8",
+                "severity": "critical",
+                "sources": "zetaris",
+            }
+        ]
+        zetaris_client, _ = self._make_client(
+            [{"headers": list(zetaris_rows[0].keys()), "data": zetaris_rows}]
+        )
+
+        class Body:
+            def __init__(self, payload):
+                self._data = json.dumps(payload).encode("utf-8")
+            def read(self):
+                return self._data
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        def opener(request, timeout=20):
+            url = request.full_url
+            if "known_exploited" in url:
+                return Body({"vulnerabilities": [{"cveID": "CVE-2024-1111"}]})
+            return Body({
+                "vulns": [{
+                    "id": "GHSA-1",
+                    "aliases": ["CVE-2024-1111"],
+                    "summary": "django issue",
+                    "affected": [{
+                        "package": {"name": "Django", "ecosystem": "PyPI"},
+                        "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "3.2.1"}]}],
+                    }],
+                    "database_specific": {"cvss_score": 9.8},
+                }]
+            })
+
+        summary = cve_manger.fetch_latest_cves(
+            opener=opener,
+            packages=[{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
+            zetaris_client=zetaris_client,
+        )
+        self.assertEqual(summary["source"], "zetaris")
+        self.assertIn("zetaris", summary["sources"])
+        matched = cve_manger.match_cves(
+            summary["items"],
+            [{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
+        )
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["cve_id"], "CVE-2024-1111")
+        self.assertTrue(matched[0]["version_confirmed"])
+        self.assertIn("cisa_kev", matched[0]["sources"])
+
+    def test_setup_zetaris_insert_values(self):
+        from ai.setup_zetaris import _insert_values, _escape_pg
+
+        items = [
+            {
+                "cve_id": "CVE-2024-5678",
+                "vendor": "PyPI",
+                "product": "requests",
+                "name": "CVE-2024-5678",
+                "date_added": "2024-07-01",
+                "description": "A request's issue with single quote",
+                "cvss_score": 8.2,
+                "severity": "high",
+                "sources": ["nist_nvd", "osv"],
+            }
+        ]
+        stmts = _insert_values(items, "2024-07-01T00:00:00Z")
+        self.assertEqual(len(stmts), 1)
+        self.assertIn("CVE-2024-5678", stmts[0])
+        self.assertIn("INSERT INTO cve_items", stmts[0])
+        self.assertIn("nist_nvd,osv", stmts[0])
+        self.assertIn("ON CONFLICT", stmts[0])
+        self.assertNotIn("''", _escape_pg("safe"))
+        self.assertIn("''", _escape_pg("it's"))
+
+    def test_setup_zetaris_batches_inserts(self):
+        from ai.setup_zetaris import _insert_values
+
+        items = [
+            {"cve_id": f"CVE-{i}", "sources": ["test"]}
+            for i in range(120)
+        ]
+        stmts = _insert_values(items, "2024-01-01T00:00:00Z", batch_size=50)
+        self.assertEqual(len(stmts), 3)
+
+    def test_fetch_cves_from_zetaris_uses_qualified_table(self):
+        """The Zetaris query must use CVE_PG.cve_items (schema-qualified)."""
+        client, log = self._make_client(
+            [{"headers": ["cve_id"], "data": [["CVE-1"]]}]
+        )
+        cve_manger.fetch_cves_from_zetaris(client, limit=5)
+        self.assertIn("CVE_PG.cve_items", log[0])
+
+
 class CouncilAndIntegrationTests(unittest.TestCase):
     def test_zetaris_rejects_non_readonly_sql(self):
         with self.assertRaises(ValueError):
@@ -1078,7 +1359,7 @@ class CouncilAndIntegrationTests(unittest.TestCase):
         self.assertEqual(assert_readonly_sql("SELECT 1"), "SELECT 1")
 
     def test_zetaris_offline_fallback(self):
-        client = ZetarisClient(cfg={"rest_url": "http://example", "org_id": "", "api_key": "", "threat_sql": ""})
+        client = ZetarisClient(cfg={"base_url": "http://example", "query_path": "/api/proxy/sql-editor/sqls/run-query", "org_id": "", "api_key": "", "query_limit": 1000, "threat_sql": ""})
         result = client.company_threat_context("Acme", fingerprints=["django"])
         self.assertEqual(result["source"], "local_fallback")
 
@@ -1314,12 +1595,10 @@ class VersionMatchAndModelTests(unittest.TestCase):
                 }
             )
 
-        with tempfile.TemporaryDirectory() as tmp:
-            summary = cve_manger.fetch_latest_cves(
-                path=Path(tmp) / "summary.json",
-                opener=opener,
-                packages=[{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
-            )
+        summary = cve_manger.fetch_latest_cves(
+            opener=opener,
+            packages=[{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],
+        )
         matched = cve_manger.match_cves(
             summary["items"],
             [{"name": "django", "version": "3.2.0", "ecosystem": "PyPI"}],

@@ -1,0 +1,1918 @@
+{
+  "summary": {
+    "tool_count": 13,
+    "finding_count": 14,
+    "severity": {
+      "high": 0,
+      "medium": 4,
+      "low": 2,
+      "info": 8
+    },
+    "matched_cve_count": 0,
+    "cves_tried_count": 0,
+    "council_rounds": 3,
+    "nist_score": 6,
+    "nist_rating": "Medium",
+    "score_standard": "heuristic",
+    "local_cve_knowledge_count": 8
+  },
+  "nist": {
+    "score": 6,
+    "scale": "1-10",
+    "standard": "heuristic",
+    "rating": "Medium",
+    "explanation": "The risk score is 6/10 (Medium). This score is a heuristic based on finding severity. The scan used 13 arsenal tools: 4 passed, 5 failed, and 4 were informational. Finding severity counts were high=0, medium=4, low=2, info=8. No CVE matched an installed package version during this scan. CVE feeds consulted: none. Multi-source confirmations in the feed set: 0. Failed checks that raised the score: misconfiguration, pen_test, xss, website_element_manipulation, clickjacking. Controls that passed and limited the score include: supply_chain, cryptographic_failures, broken_authentication, csrf.",
+    "passed": [
+      {
+        "tool": "supply_chain",
+        "status": "pass",
+        "finding_count": 1
+      },
+      {
+        "tool": "cryptographic_failures",
+        "status": "pass",
+        "finding_count": 1
+      },
+      {
+        "tool": "broken_authentication",
+        "status": "pass",
+        "finding_count": 1
+      },
+      {
+        "tool": "csrf",
+        "status": "pass",
+        "finding_count": 1
+      }
+    ],
+    "failed": [
+      {
+        "tool": "misconfiguration",
+        "status": "fail",
+        "finding_count": 2
+      },
+      {
+        "tool": "pen_test",
+        "status": "fail",
+        "finding_count": 2
+      },
+      {
+        "tool": "xss",
+        "status": "fail",
+        "finding_count": 1
+      },
+      {
+        "tool": "website_element_manipulation",
+        "status": "fail",
+        "finding_count": 1
+      },
+      {
+        "tool": "clickjacking",
+        "status": "fail",
+        "finding_count": 1
+      }
+    ],
+    "informational": [
+      {
+        "tool": "injection",
+        "status": "info",
+        "finding_count": 1
+      },
+      {
+        "tool": "access_control",
+        "status": "info",
+        "finding_count": 1
+      },
+      {
+        "tool": "session",
+        "status": "info",
+        "finding_count": 1
+      },
+      {
+        "tool": "ssrf",
+        "status": "info",
+        "finding_count": 1
+      }
+    ],
+    "tools_used": [
+      "misconfiguration",
+      "injection",
+      "pen_test",
+      "access_control",
+      "xss",
+      "supply_chain",
+      "session",
+      "cryptographic_failures",
+      "broken_authentication",
+      "website_element_manipulation",
+      "ssrf",
+      "csrf",
+      "clickjacking"
+    ]
+  },
+  "cves": {
+    "matched": [],
+    "tried": [],
+    "sources": [
+      "cisa_kev"
+    ],
+    "cross_check": {
+      "total": 0,
+      "confirmed_by_multiple_sources": 0,
+      "single_source": 0,
+      "by_source": {},
+      "confirmed_ids": []
+    },
+    "fetched_at": "2026-10-26T18:10:23.109157+00:00",
+    "local_knowledge": [
+      {
+        "cve_name": "CVE-2021-44228",
+        "how_it_works": "Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths.",
+        "defend_against": "Upgrade Log4j to a fixed release, disable message lookups, remove JndiLookup where applicable, block outbound LDAP/RMI from app hosts, and validate all log inputs."
+      },
+      {
+        "cve_name": "CVE-2022-22965",
+        "how_it_works": "Spring4Shell: data binding on certain Spring MVC setups can let attackers overwrite ClassLoader-related properties and reach remote code execution.",
+        "defend_against": "Upgrade Spring Framework to patched versions, avoid binding request data to Object/Class hierarchies, and restrict dangerous property paths in binders."
+      },
+      {
+        "cve_name": "CVE-2017-5638",
+        "how_it_works": "Apache Struts 2 Jakarta multipart parser mishandled Content-Type, allowing OGNL evaluation of attacker-controlled header values.",
+        "defend_against": "Upgrade Struts to a patched release, restrict Content-Type handling, and place a WAF rule for anomalous multipart Content-Type values as defense in depth."
+      },
+      {
+        "cve_name": "CVE-2014-0160",
+        "how_it_works": "Heartbleed: a bounds error in OpenSSL heartbeat messages could leak process memory, including secrets such as private keys or session material.",
+        "defend_against": "Upgrade OpenSSL, revoke and replace exposed certificates and keys, rotate session secrets, and verify TLS endpoints no longer advertise vulnerable builds."
+      },
+      {
+        "cve_name": "CVE-2021-34527",
+        "how_it_works": "PrintNightmare: flawed Windows Print Spooler privilege checks could allow installation of malicious printer drivers leading to privilege escalation.",
+        "defend_against": "Apply Microsoft patches, disable the Print Spooler where unused, restrict point-and-print, and monitor spooler service privilege changes."
+      },
+      {
+        "cve_name": "CVE-2023-34362",
+        "how_it_works": "MOVEit Transfer SQL injection in a web endpoint could allow unauthorized database access and subsequent file theft from the transfer application.",
+        "defend_against": "Apply Progress MOVEit patches immediately, review accounts created during the exposure window, rotate credentials, and place the admin interfaces behind VPN/SSO."
+      },
+      {
+        "cve_name": "CVE-2019-0708",
+        "how_it_works": "BlueKeep: a remote code execution flaw in legacy Remote Desktop Services on unpatched Windows hosts reachable over RDP.",
+        "defend_against": "Apply Microsoft updates, disable RDP if unused, require Network Level Authentication, and block RDP exposure on the public internet."
+      },
+      {
+        "cve_name": "CVE-2021-26855",
+        "how_it_works": "ProxyLogon: Exchange Server server-side request forgery in the CAS layer could be chained to authenticated remote code execution on vulnerable servers.",
+        "defend_against": "Patch Exchange, restrict Outlook Web Access exposure, enable MFA for admin access, and hunt for unusual ASPX webshells and mailbox export activity."
+      }
+    ]
+  },
+  "after_action_report": {
+    "summary": "0 urgent, 5 important, and 2 ongoing next steps.",
+    "next_steps": [
+      {
+        "priority": "P2",
+        "title": "Security headers missing",
+        "detail": "Add the missing response headers."
+      },
+      {
+        "priority": "P2",
+        "title": "No Content-Security-Policy for scripts",
+        "detail": "Set a CSP that limits script sources."
+      },
+      {
+        "priority": "P2",
+        "title": "Content-Security-Policy missing",
+        "detail": "Set a CSP to limit script and style sources."
+      },
+      {
+        "priority": "P2",
+        "title": "Clickjacking protection missing",
+        "detail": "Set X-Frame-Options to DENY or SAMEORIGIN, or CSP frame-ancestors."
+      },
+      {
+        "priority": "P2",
+        "title": "Re-run failed arsenal checks after fixes",
+        "detail": "After patching, re-scan with the same council tools that failed: misconfiguration, pen_test, xss, website_element_manipulation, clickjacking."
+      },
+      {
+        "priority": "P3",
+        "title": "Keep dependency and CVE monitoring continuous",
+        "detail": "Track CISA KEV, NIST NVD, and OSV regularly, pin dependencies, and apply security updates promptly."
+      },
+      {
+        "priority": "P3",
+        "title": "Harden baseline web controls",
+        "detail": "Confirm HTTPS, CSP, secure session cookies, CSRF protections, and least-privilege access on every public route."
+      }
+    ]
+  },
+  "tools": [
+    {
+      "tool": "misconfiguration",
+      "status": "fail",
+      "findings": [
+        {
+          "tool": "misconfiguration",
+          "severity": "medium",
+          "title": "Security headers missing",
+          "detail": "Add the missing response headers.",
+          "evidence": "content-security-policy,strict-transport-security,x-content-type-options,referrer-policy,permissions-policy"
+        },
+        {
+          "tool": "misconfiguration",
+          "severity": "low",
+          "title": "Stack header disclosed",
+          "detail": "Avoid exposing server product banners.",
+          "evidence": "server: APISIX"
+        }
+      ]
+    },
+    {
+      "tool": "injection",
+      "status": "info",
+      "findings": [
+        {
+          "tool": "injection",
+          "severity": "info",
+          "title": "Live injection tests are not run",
+          "detail": "This tool only reviews uploaded source for unsafe query construction.",
+          "evidence": "https://example.invalid/"
+        }
+      ]
+    },
+    {
+      "tool": "pen_test",
+      "status": "fail",
+      "findings": [
+        {
+          "tool": "pen_test",
+          "severity": "medium",
+          "title": "Security headers missing",
+          "detail": "Add the missing response headers.",
+          "evidence": "content-security-policy,strict-transport-security,x-content-type-options,referrer-policy,permissions-policy"
+        },
+        {
+          "tool": "pen_test",
+          "severity": "low",
+          "title": "Stack header disclosed",
+          "detail": "Avoid exposing server product and version banners.",
+          "evidence": "server: APISIX"
+        }
+      ]
+    },
+    {
+      "tool": "access_control",
+      "status": "info",
+      "findings": [
+        {
+          "tool": "access_control",
+          "severity": "info",
+          "title": "Live access-control probing is not run",
+          "detail": "This tool only reviews uploaded source for auth and object-access patterns.",
+          "evidence": "https://example.invalid/"
+        }
+      ]
+    },
+    {
+      "tool": "xss",
+      "status": "fail",
+      "findings": [
+        {
+          "tool": "xss",
+          "severity": "medium",
+          "title": "No Content-Security-Policy for scripts",
+          "detail": "Set a CSP that limits script sources.",
+          "evidence": "https://example.invalid/"
+        }
+      ]
+    },
+    {
+      "tool": "supply_chain",
+      "status": "pass",
+      "findings": [
+        {
+          "tool": "supply_chain",
+          "severity": "info",
+          "title": "No supply-chain issues found",
+          "detail": "No unlocked manifests or unsigned third-party scripts were detected.",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "tool": "session",
+      "status": "info",
+      "findings": [
+        {
+          "tool": "session",
+          "severity": "info",
+          "title": "No Set-Cookie header on this response",
+          "detail": "Session flags can only be checked when the server sets a cookie.",
+          "evidence": "https://example.invalid/"
+        }
+      ]
+    },
+    {
+      "tool": "cryptographic_failures",
+      "status": "pass",
+      "findings": [
+        {
+          "tool": "cryptographic_failures",
+          "severity": "info",
+          "title": "URL uses HTTPS",
+          "detail": "Transport encryption is present for this target URL.",
+          "evidence": "https://example.invalid/"
+        }
+      ]
+    },
+    {
+      "tool": "broken_authentication",
+      "status": "pass",
+      "findings": [
+        {
+          "tool": "broken_authentication",
+          "severity": "info",
+          "title": "No Basic auth challenge on this response",
+          "detail": "Authentication quality still depends on login and session design.",
+          "evidence": "https://example.invalid/"
+        }
+      ]
+    },
+    {
+      "tool": "website_element_manipulation",
+      "status": "fail",
+      "findings": [
+        {
+          "tool": "website_element_manipulation",
+          "severity": "medium",
+          "title": "Content-Security-Policy missing",
+          "detail": "Set a CSP to limit script and style sources.",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "tool": "ssrf",
+      "status": "info",
+      "findings": [
+        {
+          "tool": "ssrf",
+          "severity": "info",
+          "title": "Live SSRF tests are not run",
+          "detail": "This tool only reviews uploaded source for user-controlled server fetches.",
+          "evidence": "https://example.invalid/"
+        }
+      ]
+    },
+    {
+      "tool": "csrf",
+      "status": "pass",
+      "findings": [
+        {
+          "tool": "csrf",
+          "severity": "info",
+          "title": "No CSRF issues found on reviewed forms",
+          "detail": "No unprotected POST forms were detected in the target.",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "tool": "clickjacking",
+      "status": "fail",
+      "findings": [
+        {
+          "tool": "clickjacking",
+          "severity": "medium",
+          "title": "Clickjacking protection missing",
+          "detail": "Set X-Frame-Options to DENY or SAMEORIGIN, or CSP frame-ancestors.",
+          "evidence": "https://example.invalid/"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "tool": "misconfiguration",
+      "severity": "medium",
+      "title": "Security headers missing",
+      "detail": "Add the missing response headers.",
+      "evidence": "content-security-policy,strict-transport-security,x-content-type-options,referrer-policy,permissions-policy"
+    },
+    {
+      "tool": "misconfiguration",
+      "severity": "low",
+      "title": "Stack header disclosed",
+      "detail": "Avoid exposing server product banners.",
+      "evidence": "server: APISIX"
+    },
+    {
+      "tool": "injection",
+      "severity": "info",
+      "title": "Live injection tests are not run",
+      "detail": "This tool only reviews uploaded source for unsafe query construction.",
+      "evidence": "https://example.invalid/"
+    },
+    {
+      "tool": "pen_test",
+      "severity": "low",
+      "title": "Stack header disclosed",
+      "detail": "Avoid exposing server product and version banners.",
+      "evidence": "server: APISIX"
+    },
+    {
+      "tool": "access_control",
+      "severity": "info",
+      "title": "Live access-control probing is not run",
+      "detail": "This tool only reviews uploaded source for auth and object-access patterns.",
+      "evidence": "https://example.invalid/"
+    },
+    {
+      "tool": "xss",
+      "severity": "medium",
+      "title": "No Content-Security-Policy for scripts",
+      "detail": "Set a CSP that limits script sources.",
+      "evidence": "https://example.invalid/"
+    },
+    {
+      "tool": "supply_chain",
+      "severity": "info",
+      "title": "No supply-chain issues found",
+      "detail": "No unlocked manifests or unsigned third-party scripts were detected.",
+      "evidence": ""
+    },
+    {
+      "tool": "session",
+      "severity": "info",
+      "title": "No Set-Cookie header on this response",
+      "detail": "Session flags can only be checked when the server sets a cookie.",
+      "evidence": "https://example.invalid/"
+    },
+    {
+      "tool": "cryptographic_failures",
+      "severity": "info",
+      "title": "URL uses HTTPS",
+      "detail": "Transport encryption is present for this target URL.",
+      "evidence": "https://example.invalid/"
+    },
+    {
+      "tool": "broken_authentication",
+      "severity": "info",
+      "title": "No Basic auth challenge on this response",
+      "detail": "Authentication quality still depends on login and session design.",
+      "evidence": "https://example.invalid/"
+    },
+    {
+      "tool": "website_element_manipulation",
+      "severity": "medium",
+      "title": "Content-Security-Policy missing",
+      "detail": "Set a CSP to limit script and style sources.",
+      "evidence": ""
+    },
+    {
+      "tool": "ssrf",
+      "severity": "info",
+      "title": "Live SSRF tests are not run",
+      "detail": "This tool only reviews uploaded source for user-controlled server fetches.",
+      "evidence": "https://example.invalid/"
+    },
+    {
+      "tool": "csrf",
+      "severity": "info",
+      "title": "No CSRF issues found on reviewed forms",
+      "detail": "No unprotected POST forms were detected in the target.",
+      "evidence": ""
+    },
+    {
+      "tool": "clickjacking",
+      "severity": "medium",
+      "title": "Clickjacking protection missing",
+      "detail": "Set X-Frame-Options to DENY or SAMEORIGIN, or CSP frame-ancestors.",
+      "evidence": "https://example.invalid/"
+    }
+  ],
+  "council": {
+    "debate": [
+      {
+        "round": 1,
+        "proposals": [
+          {
+            "agent": "recon",
+            "role": "surface mapper",
+            "argument": "recon (surface mapper): for a url target, next we should run pen_test, misconfiguration, supply_chain because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "pen_test",
+              "misconfiguration",
+              "supply_chain"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "attacker_mindset",
+            "role": "offensive analyst (defensive checks only)",
+            "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run injection, xss, ssrf because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "injection",
+              "xss",
+              "ssrf"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "defender",
+            "role": "defensive hardening analyst",
+            "argument": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "session",
+              "csrf",
+              "broken_authentication"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "intel",
+            "role": "threat-intel / Zetaris analyst",
+            "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run pen_test, supply_chain, misconfiguration because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "pen_test",
+              "supply_chain",
+              "misconfiguration"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "upload_forms",
+            "role": "content and transfer analyst",
+            "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "file_upload_abuse",
+              "website_element_manipulation",
+              "csrf"
+            ],
+            "source": "template"
+          }
+        ],
+        "votes": [
+          [
+            "pen_test",
+            6
+          ],
+          [
+            "misconfiguration",
+            3
+          ],
+          [
+            "supply_chain",
+            3
+          ],
+          [
+            "injection",
+            3
+          ],
+          [
+            "session",
+            3
+          ],
+          [
+            "csrf",
+            3
+          ],
+          [
+            "file_upload_abuse",
+            3
+          ],
+          [
+            "xss",
+            2
+          ],
+          [
+            "website_element_manipulation",
+            2
+          ],
+          [
+            "ssrf",
+            1
+          ],
+          [
+            "broken_authentication",
+            1
+          ]
+        ],
+        "scout": {
+          "intent": {
+            "primary": "threat.inject",
+            "confidence": 0.55
+          },
+          "risk": {
+            "level": "medium",
+            "flags": []
+          },
+          "candidates": [
+            {
+              "intent": "threat.inject",
+              "score": 0.55
+            },
+            {
+              "intent": "threat.auth",
+              "score": 0.45
+            },
+            {
+              "intent": "threat.recon",
+              "score": 0.4
+            },
+            {
+              "intent": "threat.crypto_api",
+              "score": 0.2
+            },
+            {
+              "intent": "threat.upload",
+              "score": 0.1
+            },
+            {
+              "intent": "threat.done",
+              "score": 0
+            }
+          ],
+          "executionContract": {
+            "schema": "meterless.scout.execution_contract.v1",
+            "intent": {
+              "primary": "threat.inject",
+              "confidence": 0.55
+            },
+            "risk": {
+              "level": "medium",
+              "flags": []
+            },
+            "toolPlan": [
+              {
+                "tool": "injection",
+                "input": {
+                  "surface": "council"
+                }
+              },
+              {
+                "tool": "xss",
+                "input": {
+                  "surface": "council"
+                }
+              },
+              {
+                "tool": "ssrf",
+                "input": {
+                  "surface": "council"
+                }
+              }
+            ],
+            "user": {
+              "id": "threat-council",
+              "role": "arbiter"
+            },
+            "surface": "council",
+            "policy": "defensive_arsenal_only"
+          },
+          "engine": "meterless-scout-local"
+        },
+        "debate_manager": {
+          "session_id": "debate-3df6e457ad55",
+          "collisions": [
+            {
+              "type": "duplicate_tool",
+              "tool": "csrf",
+              "agents": [
+                "defender",
+                "upload_forms"
+              ]
+            },
+            {
+              "type": "duplicate_tool",
+              "tool": "misconfiguration",
+              "agents": [
+                "recon",
+                "intel"
+              ]
+            },
+            {
+              "type": "duplicate_tool",
+              "tool": "pen_test",
+              "agents": [
+                "recon",
+                "intel"
+              ]
+            },
+            {
+              "type": "duplicate_tool",
+              "tool": "supply_chain",
+              "agents": [
+                "recon",
+                "intel"
+              ]
+            }
+          ],
+          "resolution": {
+            "chosen_tools": [
+              "pen_test",
+              "misconfiguration",
+              "injection",
+              "access_control"
+            ],
+            "collisions": [
+              {
+                "type": "duplicate_tool",
+                "tool": "csrf",
+                "agents": [
+                  "defender",
+                  "upload_forms"
+                ]
+              },
+              {
+                "type": "duplicate_tool",
+                "tool": "misconfiguration",
+                "agents": [
+                  "recon",
+                  "intel"
+                ]
+              },
+              {
+                "type": "duplicate_tool",
+                "tool": "pen_test",
+                "agents": [
+                  "recon",
+                  "intel"
+                ]
+              },
+              {
+                "type": "duplicate_tool",
+                "tool": "supply_chain",
+                "agents": [
+                  "recon",
+                  "intel"
+                ]
+              }
+            ],
+            "invalid_agents": [],
+            "vote_scores": [
+              [
+                "pen_test",
+                12
+              ],
+              [
+                "misconfiguration",
+                6
+              ],
+              [
+                "supply_chain",
+                6
+              ],
+              [
+                "injection",
+                6
+              ],
+              [
+                "session",
+                6
+              ],
+              [
+                "csrf",
+                6
+              ],
+              [
+                "file_upload_abuse",
+                6
+              ],
+              [
+                "xss",
+                4
+              ],
+              [
+                "website_element_manipulation",
+                4
+              ],
+              [
+                "ssrf",
+                2
+              ],
+              [
+                "broken_authentication",
+                2
+              ]
+            ],
+            "reasons": {
+              "pen_test": [
+                {
+                  "agent": "recon",
+                  "argument": "recon (surface mapper): for a url target, next we should run pen_test, misconfiguration, supply_chain because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                },
+                {
+                  "agent": "intel",
+                  "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run pen_test, supply_chain, misconfiguration because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "misconfiguration": [
+                {
+                  "agent": "recon",
+                  "argument": "recon (surface mapper): for a url target, next we should run pen_test, misconfiguration, supply_chain because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                },
+                {
+                  "agent": "intel",
+                  "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run pen_test, supply_chain, misconfiguration because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "supply_chain": [
+                {
+                  "agent": "recon",
+                  "argument": "recon (surface mapper): for a url target, next we should run pen_test, misconfiguration, supply_chain because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                },
+                {
+                  "agent": "intel",
+                  "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run pen_test, supply_chain, misconfiguration because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "injection": [
+                {
+                  "agent": "attacker_mindset",
+                  "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run injection, xss, ssrf because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "xss": [
+                {
+                  "agent": "attacker_mindset",
+                  "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run injection, xss, ssrf because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "ssrf": [
+                {
+                  "agent": "attacker_mindset",
+                  "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run injection, xss, ssrf because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "session": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "csrf": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                },
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "broken_authentication": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "file_upload_abuse": [
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "website_element_manipulation": [
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "access_control": [
+                {
+                  "agent": "debate_manager",
+                  "argument": "Inserted overlooked attack surface after duplicate collision on supply_chain.",
+                  "rank": 0
+                }
+              ]
+            },
+            "guidelines_applied": [
+              "arsenal_scope",
+              "collision",
+              "reasoning",
+              "spec"
+            ]
+          }
+        },
+        "memory_trace": {
+          "strategy": "comprehensive",
+          "query": "threat findings next action company CVE",
+          "hits": 2,
+          "engine": "meterless-hmem-local"
+        },
+        "chosen_tools": [
+          "pen_test",
+          "misconfiguration",
+          "injection",
+          "access_control"
+        ]
+      },
+      {
+        "round": 2,
+        "proposals": [
+          {
+            "agent": "recon",
+            "role": "surface mapper",
+            "argument": "recon (surface mapper): for a url target, next we should run supply_chain, clickjacking because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "supply_chain",
+              "clickjacking"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "attacker_mindset",
+            "role": "offensive analyst (defensive checks only)",
+            "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run xss, ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "xss",
+              "ssrf",
+              "business_logic"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "defender",
+            "role": "defensive hardening analyst",
+            "argument": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "session",
+              "csrf",
+              "broken_authentication"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "intel",
+            "role": "threat-intel / Zetaris analyst",
+            "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run supply_chain, denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "supply_chain",
+              "denial_of_service",
+              "api_mass_assignment"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "upload_forms",
+            "role": "content and transfer analyst",
+            "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "file_upload_abuse",
+              "website_element_manipulation",
+              "csrf"
+            ],
+            "source": "template"
+          }
+        ],
+        "votes": [
+          [
+            "supply_chain",
+            6
+          ],
+          [
+            "xss",
+            3
+          ],
+          [
+            "session",
+            3
+          ],
+          [
+            "csrf",
+            3
+          ],
+          [
+            "file_upload_abuse",
+            3
+          ],
+          [
+            "clickjacking",
+            2
+          ],
+          [
+            "ssrf",
+            2
+          ],
+          [
+            "denial_of_service",
+            2
+          ],
+          [
+            "website_element_manipulation",
+            2
+          ],
+          [
+            "business_logic",
+            1
+          ],
+          [
+            "broken_authentication",
+            1
+          ],
+          [
+            "api_mass_assignment",
+            1
+          ]
+        ],
+        "scout": {
+          "intent": {
+            "primary": "threat.auth",
+            "confidence": 0.8
+          },
+          "risk": {
+            "level": "medium",
+            "flags": []
+          },
+          "candidates": [
+            {
+              "intent": "threat.auth",
+              "score": 0.8
+            },
+            {
+              "intent": "threat.inject",
+              "score": 0.7
+            },
+            {
+              "intent": "threat.upload",
+              "score": 0.5
+            },
+            {
+              "intent": "threat.recon",
+              "score": 0.3
+            },
+            {
+              "intent": "threat.crypto_api",
+              "score": 0.2
+            },
+            {
+              "intent": "threat.done",
+              "score": 0
+            }
+          ],
+          "executionContract": {
+            "schema": "meterless.scout.execution_contract.v1",
+            "intent": {
+              "primary": "threat.auth",
+              "confidence": 0.8
+            },
+            "risk": {
+              "level": "medium",
+              "flags": []
+            },
+            "toolPlan": [
+              {
+                "tool": "broken_authentication",
+                "input": {
+                  "surface": "council"
+                }
+              },
+              {
+                "tool": "session",
+                "input": {
+                  "surface": "council"
+                }
+              },
+              {
+                "tool": "csrf",
+                "input": {
+                  "surface": "council"
+                }
+              },
+              {
+                "tool": "account_takeover",
+                "input": {
+                  "surface": "council"
+                }
+              }
+            ],
+            "user": {
+              "id": "threat-council",
+              "role": "arbiter"
+            },
+            "surface": "council",
+            "policy": "defensive_arsenal_only"
+          },
+          "engine": "meterless-scout-local"
+        },
+        "debate_manager": {
+          "session_id": "debate-3df6e457ad55",
+          "collisions": [
+            {
+              "type": "duplicate_tool",
+              "tool": "csrf",
+              "agents": [
+                "defender",
+                "upload_forms"
+              ]
+            },
+            {
+              "type": "duplicate_tool",
+              "tool": "supply_chain",
+              "agents": [
+                "recon",
+                "intel"
+              ]
+            }
+          ],
+          "resolution": {
+            "chosen_tools": [
+              "supply_chain",
+              "xss",
+              "session",
+              "cryptographic_failures"
+            ],
+            "collisions": [
+              {
+                "type": "duplicate_tool",
+                "tool": "csrf",
+                "agents": [
+                  "defender",
+                  "upload_forms"
+                ]
+              },
+              {
+                "type": "duplicate_tool",
+                "tool": "supply_chain",
+                "agents": [
+                  "recon",
+                  "intel"
+                ]
+              }
+            ],
+            "invalid_agents": [],
+            "vote_scores": [
+              [
+                "supply_chain",
+                12
+              ],
+              [
+                "xss",
+                6
+              ],
+              [
+                "session",
+                6
+              ],
+              [
+                "csrf",
+                6
+              ],
+              [
+                "file_upload_abuse",
+                6
+              ],
+              [
+                "clickjacking",
+                4
+              ],
+              [
+                "ssrf",
+                4
+              ],
+              [
+                "denial_of_service",
+                4
+              ],
+              [
+                "website_element_manipulation",
+                4
+              ],
+              [
+                "business_logic",
+                2
+              ],
+              [
+                "broken_authentication",
+                2
+              ],
+              [
+                "api_mass_assignment",
+                2
+              ]
+            ],
+            "reasons": {
+              "supply_chain": [
+                {
+                  "agent": "recon",
+                  "argument": "recon (surface mapper): for a url target, next we should run supply_chain, clickjacking because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                },
+                {
+                  "agent": "intel",
+                  "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run supply_chain, denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "clickjacking": [
+                {
+                  "agent": "recon",
+                  "argument": "recon (surface mapper): for a url target, next we should run supply_chain, clickjacking because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "xss": [
+                {
+                  "agent": "attacker_mindset",
+                  "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run xss, ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "ssrf": [
+                {
+                  "agent": "attacker_mindset",
+                  "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run xss, ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "business_logic": [
+                {
+                  "agent": "attacker_mindset",
+                  "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run xss, ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "session": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "csrf": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                },
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "broken_authentication": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "denial_of_service": [
+                {
+                  "agent": "intel",
+                  "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run supply_chain, denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "api_mass_assignment": [
+                {
+                  "agent": "intel",
+                  "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run supply_chain, denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "file_upload_abuse": [
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "website_element_manipulation": [
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "cryptographic_failures": [
+                {
+                  "agent": "debate_manager",
+                  "argument": "Inserted overlooked attack surface after duplicate collision on csrf.",
+                  "rank": 0
+                }
+              ]
+            },
+            "guidelines_applied": [
+              "arsenal_scope",
+              "collision",
+              "reasoning",
+              "spec"
+            ]
+          }
+        },
+        "memory_trace": {
+          "strategy": "comprehensive",
+          "query": "threat findings next action company CVE",
+          "hits": 5,
+          "engine": "meterless-hmem-local"
+        },
+        "chosen_tools": [
+          "supply_chain",
+          "xss",
+          "session",
+          "cryptographic_failures",
+          "broken_authentication"
+        ]
+      },
+      {
+        "round": 3,
+        "proposals": [
+          {
+            "agent": "attacker_mindset",
+            "role": "offensive analyst (defensive checks only)",
+            "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "ssrf",
+              "business_logic"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "defender",
+            "role": "defensive hardening analyst",
+            "argument": "defender (defensive hardening analyst): for a url target, next we should run csrf, account_takeover, website_element_manipulation because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "csrf",
+              "account_takeover",
+              "website_element_manipulation"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "recon",
+            "role": "surface mapper",
+            "argument": "recon (surface mapper): for a url target, next we should run clickjacking because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "clickjacking"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "intel",
+            "role": "threat-intel / Zetaris analyst",
+            "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "denial_of_service",
+              "api_mass_assignment"
+            ],
+            "source": "template"
+          },
+          {
+            "agent": "upload_forms",
+            "role": "content and transfer analyst",
+            "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+            "votes": [
+              "file_upload_abuse",
+              "website_element_manipulation",
+              "csrf"
+            ],
+            "source": "template"
+          }
+        ],
+        "votes": [
+          [
+            "csrf",
+            4
+          ],
+          [
+            "ssrf",
+            3
+          ],
+          [
+            "website_element_manipulation",
+            3
+          ],
+          [
+            "clickjacking",
+            3
+          ],
+          [
+            "denial_of_service",
+            3
+          ],
+          [
+            "file_upload_abuse",
+            3
+          ],
+          [
+            "business_logic",
+            2
+          ],
+          [
+            "account_takeover",
+            2
+          ],
+          [
+            "api_mass_assignment",
+            2
+          ]
+        ],
+        "scout": {
+          "intent": {
+            "primary": "threat.auth",
+            "confidence": 0.9
+          },
+          "risk": {
+            "level": "medium",
+            "flags": []
+          },
+          "candidates": [
+            {
+              "intent": "threat.auth",
+              "score": 0.9
+            },
+            {
+              "intent": "threat.inject",
+              "score": 0.85
+            },
+            {
+              "intent": "threat.done",
+              "score": 0.4
+            },
+            {
+              "intent": "threat.crypto_api",
+              "score": 0.35
+            },
+            {
+              "intent": "threat.recon",
+              "score": 0.25
+            },
+            {
+              "intent": "threat.upload",
+              "score": 0.1
+            }
+          ],
+          "executionContract": {
+            "schema": "meterless.scout.execution_contract.v1",
+            "intent": {
+              "primary": "threat.auth",
+              "confidence": 0.9
+            },
+            "risk": {
+              "level": "medium",
+              "flags": []
+            },
+            "toolPlan": [
+              {
+                "tool": "csrf",
+                "input": {
+                  "surface": "council"
+                }
+              },
+              {
+                "tool": "account_takeover",
+                "input": {
+                  "surface": "council"
+                }
+              }
+            ],
+            "user": {
+              "id": "threat-council",
+              "role": "arbiter"
+            },
+            "surface": "council",
+            "policy": "defensive_arsenal_only"
+          },
+          "engine": "meterless-scout-local"
+        },
+        "debate_manager": {
+          "session_id": "debate-3df6e457ad55",
+          "collisions": [
+            {
+              "type": "duplicate_tool",
+              "tool": "csrf",
+              "agents": [
+                "defender",
+                "upload_forms"
+              ]
+            },
+            {
+              "type": "duplicate_tool",
+              "tool": "website_element_manipulation",
+              "agents": [
+                "defender",
+                "upload_forms"
+              ]
+            }
+          ],
+          "resolution": {
+            "chosen_tools": [
+              "csrf",
+              "ssrf",
+              "website_element_manipulation",
+              "clickjacking"
+            ],
+            "collisions": [
+              {
+                "type": "duplicate_tool",
+                "tool": "csrf",
+                "agents": [
+                  "defender",
+                  "upload_forms"
+                ]
+              },
+              {
+                "type": "duplicate_tool",
+                "tool": "website_element_manipulation",
+                "agents": [
+                  "defender",
+                  "upload_forms"
+                ]
+              }
+            ],
+            "invalid_agents": [],
+            "vote_scores": [
+              [
+                "csrf",
+                8
+              ],
+              [
+                "ssrf",
+                6
+              ],
+              [
+                "website_element_manipulation",
+                6
+              ],
+              [
+                "clickjacking",
+                6
+              ],
+              [
+                "denial_of_service",
+                6
+              ],
+              [
+                "file_upload_abuse",
+                6
+              ],
+              [
+                "business_logic",
+                4
+              ],
+              [
+                "account_takeover",
+                4
+              ],
+              [
+                "api_mass_assignment",
+                4
+              ]
+            ],
+            "reasons": {
+              "ssrf": [
+                {
+                  "agent": "attacker_mindset",
+                  "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "business_logic": [
+                {
+                  "agent": "attacker_mindset",
+                  "argument": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "csrf": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run csrf, account_takeover, website_element_manipulation because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                },
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                }
+              ],
+              "account_takeover": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run csrf, account_takeover, website_element_manipulation because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "website_element_manipulation": [
+                {
+                  "agent": "defender",
+                  "argument": "defender (defensive hardening analyst): for a url target, next we should run csrf, account_takeover, website_element_manipulation because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 3
+                },
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "clickjacking": [
+                {
+                  "agent": "recon",
+                  "argument": "recon (surface mapper): for a url target, next we should run clickjacking because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "denial_of_service": [
+                {
+                  "agent": "intel",
+                  "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ],
+              "api_mass_assignment": [
+                {
+                  "agent": "intel",
+                  "argument": "intel (threat-intel / Zetaris analyst): for a url target, next we should run denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 2
+                }
+              ],
+              "file_upload_abuse": [
+                {
+                  "agent": "upload_forms",
+                  "argument": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+                  "rank": 1
+                }
+              ]
+            },
+            "guidelines_applied": [
+              "arsenal_scope",
+              "collision",
+              "reasoning",
+              "spec"
+            ]
+          }
+        },
+        "memory_trace": {
+          "strategy": "comprehensive",
+          "query": "threat findings next action company CVE",
+          "hits": 5,
+          "engine": "meterless-hmem-local"
+        },
+        "chosen_tools": [
+          "csrf",
+          "ssrf",
+          "website_element_manipulation",
+          "clickjacking"
+        ]
+      }
+    ],
+    "memory": [
+      {
+        "id": "m-1",
+        "kind": "intel",
+        "text": "Threat intel from local_fallback for https://example.invalid/",
+        "meta": {
+          "rows": 1,
+          "fingerprints": [
+            "APISIX"
+          ]
+        },
+        "created_at": "2026-10-26T18:10:23.148508+00:00"
+      },
+      {
+        "id": "m-2",
+        "kind": "cve_knowledge",
+        "text": "Local common CVE briefs: CVE-2021-44228, CVE-2022-22965, CVE-2017-5638, CVE-2014-0160, CVE-2021-34527, CVE-2023-34362, CVE-2019-0708, CVE-2021-26855",
+        "meta": {
+          "briefs": [
+            "CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable message lookups, remove JndiLookup where applicable, block outbound LDAP/RMI from app hosts, and validate all log inpu",
+            "CVE-2022-22965: Spring4Shell: data binding on certain Spring MVC setups can let attackers overwrite ClassLoader-related properties and reach remote code execution. Defend: Upgrade Spring Framework to patched versions, avoid binding request data to Object/Class hierarchies, and restrict dangerous property paths in binders.",
+            "CVE-2017-5638: Apache Struts 2 Jakarta multipart parser mishandled Content-Type, allowing OGNL evaluation of attacker-controlled header values. Defend: Upgrade Struts to a patched release, restrict Content-Type handling, and place a WAF rule for anomalous multipart Content-Type values as defense in depth.",
+            "CVE-2014-0160: Heartbleed: a bounds error in OpenSSL heartbeat messages could leak process memory, including secrets such as private keys or session material. Defend: Upgrade OpenSSL, revoke and replace exposed certificates and keys, rotate session secrets, and verify TLS endpoints no longer advertise vulnerable builds.",
+            "CVE-2021-34527: PrintNightmare: flawed Windows Print Spooler privilege checks could allow installation of malicious printer drivers leading to privilege escalation. Defend: Apply Microsoft patches, disable the Print Spooler where unused, restrict point-and-print, and monitor spooler service privilege changes.",
+            "CVE-2023-34362: MOVEit Transfer SQL injection in a web endpoint could allow unauthorized database access and subsequent file theft from the transfer application. Defend: Apply Progress MOVEit patches immediately, review accounts created during the exposure window, rotate credentials, and place the admin interfaces behind VPN/SSO",
+            "CVE-2019-0708: BlueKeep: a remote code execution flaw in legacy Remote Desktop Services on unpatched Windows hosts reachable over RDP. Defend: Apply Microsoft updates, disable RDP if unused, require Network Level Authentication, and block RDP exposure on the public internet.",
+            "CVE-2021-26855: ProxyLogon: Exchange Server server-side request forgery in the CAS layer could be chained to authenticated remote code execution on vulnerable servers. Defend: Patch Exchange, restrict Outlook Web Access exposure, enable MFA for admin access, and hunt for unusual ASPX webshells and mailbox export activity."
+          ]
+        },
+        "created_at": "2026-10-26T18:10:23.148508+00:00"
+      },
+      {
+        "id": "m-3",
+        "kind": "findings",
+        "text": "Round 1 ran ['pen_test', 'misconfiguration', 'injection', 'access_control']: medium misconfiguration: Security headers missing; low misconfiguration: Stack header disclosed; info injection: Live injection tests are not run; medium pen_test: Security headers missing; low pen_test: Stack header disclosed; info access_control: Live access-control probing is not run",
+        "meta": {
+          "tools": [
+            "pen_test",
+            "misconfiguration",
+            "injection",
+            "access_control"
+          ]
+        },
+        "created_at": "2026-10-26T18:10:23.260130+00:00"
+      },
+      {
+        "id": "m-4",
+        "kind": "argument",
+        "text": "recon (surface mapper): for a url target, next we should run pen_test, misconfiguration, supply_chain because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "recon"
+        },
+        "created_at": "2026-10-26T18:10:23.260130+00:00"
+      },
+      {
+        "id": "m-5",
+        "kind": "argument",
+        "text": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run injection, xss, ssrf because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "attacker_mindset"
+        },
+        "created_at": "2026-10-26T18:10:23.260130+00:00"
+      },
+      {
+        "id": "m-6",
+        "kind": "argument",
+        "text": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "defender"
+        },
+        "created_at": "2026-10-26T18:10:23.260130+00:00"
+      },
+      {
+        "id": "m-7",
+        "kind": "argument",
+        "text": "intel (threat-intel / Zetaris analyst): for a url target, next we should run pen_test, supply_chain, misconfiguration because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "intel"
+        },
+        "created_at": "2026-10-26T18:10:23.260130+00:00"
+      },
+      {
+        "id": "m-8",
+        "kind": "argument",
+        "text": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "upload_forms"
+        },
+        "created_at": "2026-10-26T18:10:23.260130+00:00"
+      },
+      {
+        "id": "m-9",
+        "kind": "findings",
+        "text": "Round 2 ran ['supply_chain', 'xss', 'session', 'cryptographic_failures', 'broken_authentication']: medium xss: No Content-Security-Policy for scripts; info supply_chain: No supply-chain issues found; info session: No Set-Cookie header on this response; info cryptographic_failures: URL uses HTTPS; info broken_authentication: No Basic auth challenge on this response",
+        "meta": {
+          "tools": [
+            "supply_chain",
+            "xss",
+            "session",
+            "cryptographic_failures",
+            "broken_authentication"
+          ]
+        },
+        "created_at": "2026-10-26T18:10:23.382828+00:00"
+      },
+      {
+        "id": "m-10",
+        "kind": "argument",
+        "text": "recon (surface mapper): for a url target, next we should run supply_chain, clickjacking because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "recon"
+        },
+        "created_at": "2026-10-26T18:10:23.382828+00:00"
+      },
+      {
+        "id": "m-11",
+        "kind": "argument",
+        "text": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run xss, ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "attacker_mindset"
+        },
+        "created_at": "2026-10-26T18:10:23.382828+00:00"
+      },
+      {
+        "id": "m-12",
+        "kind": "argument",
+        "text": "defender (defensive hardening analyst): for a url target, next we should run session, csrf, broken_authentication because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "defender"
+        },
+        "created_at": "2026-10-26T18:10:23.382828+00:00"
+      },
+      {
+        "id": "m-13",
+        "kind": "argument",
+        "text": "intel (threat-intel / Zetaris analyst): for a url target, next we should run supply_chain, denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "intel"
+        },
+        "created_at": "2026-10-26T18:10:23.382828+00:00"
+      },
+      {
+        "id": "m-14",
+        "kind": "argument",
+        "text": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "upload_forms"
+        },
+        "created_at": "2026-10-26T18:10:23.382828+00:00"
+      },
+      {
+        "id": "m-15",
+        "kind": "findings",
+        "text": "Round 3 ran ['csrf', 'ssrf', 'website_element_manipulation', 'clickjacking']: medium website_element_manipulation: Content-Security-Policy missing; info ssrf: Live SSRF tests are not run; info csrf: No CSRF issues found on reviewed forms; medium clickjacking: Clickjacking protection missing",
+        "meta": {
+          "tools": [
+            "csrf",
+            "ssrf",
+            "website_element_manipulation",
+            "clickjacking"
+          ]
+        },
+        "created_at": "2026-10-26T18:10:23.548145+00:00"
+      },
+      {
+        "id": "m-16",
+        "kind": "argument",
+        "text": "attacker_mindset (offensive analyst (defensive checks only)): for a url target, next we should run ssrf, business_logic because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "attacker_mindset"
+        },
+        "created_at": "2026-10-26T18:10:23.548145+00:00"
+      },
+      {
+        "id": "m-17",
+        "kind": "argument",
+        "text": "defender (defensive hardening analyst): for a url target, next we should run csrf, account_takeover, website_element_manipulation because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "defender"
+        },
+        "created_at": "2026-10-26T18:10:23.548145+00:00"
+      },
+      {
+        "id": "m-18",
+        "kind": "argument",
+        "text": "recon (surface mapper): for a url target, next we should run clickjacking because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "recon"
+        },
+        "created_at": "2026-10-26T18:10:23.548145+00:00"
+      },
+      {
+        "id": "m-19",
+        "kind": "argument",
+        "text": "intel (threat-intel / Zetaris analyst): for a url target, next we should run denial_of_service, api_mass_assignment because those checks match this role's attack surface. Local CVE context: CVE-2021-44228: Log4Shell: untrusted input can trigger Log4j message lookup, causing the logger to resolve remote references and load attacker-controlled code paths. Defend: Upgrade Log4j to a fixed release, disable mess Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "intel"
+        },
+        "created_at": "2026-10-26T18:10:23.549144+00:00"
+      },
+      {
+        "id": "m-20",
+        "kind": "argument",
+        "text": "upload_forms (content and transfer analyst): for a url target, next we should run file_upload_abuse, website_element_manipulation, csrf because those checks match this role's attack surface. Following debate guidelines: no bare agree/disagree; justify every vote.",
+        "meta": {
+          "agent": "upload_forms"
+        },
+        "created_at": "2026-10-26T18:10:23.549144+00:00"
+      }
+    ],
+    "intel": {
+      "source": "local_fallback",
+      "company": "https://example.invalid/",
+      "rows": [
+        {
+          "note": "Configure ZETARIS_* and optional ZETARIS_THREAT_SQL for live intel",
+          "fingerprints": [
+            "APISIX"
+          ]
+        }
+      ],
+      "fingerprints": [
+        "APISIX"
+      ]
+    },
+    "engines": {
+      "zetaris": "local_fallback",
+      "meterless_scout": "meterless-scout-local",
+      "meterless_hmem": "meterless-hmem-local",
+      "council": "parallel-threat-council",
+      "debate_manager": "debate-manager-local",
+      "meterless_model": "template"
+    }
+  },
+  "narrative": "Synthetic demonstration data only. These illustrative findings were not detected on a live target.",
+  "target": {
+    "kind": "url",
+    "url": "https://example.invalid/",
+    "file_count": 0,
+    "company": "https://example.invalid/"
+  }
+}

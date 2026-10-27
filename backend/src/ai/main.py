@@ -19,6 +19,7 @@ from ai.cve_knowledge import (
     load_all_cve_knowledge,
     load_cve_entry,
 )
+from ai.zetaris_client import ZetarisClient
 from cyber_tools.pen_test import fingerprints_from_target
 from report import build_report
 
@@ -145,10 +146,13 @@ def run_scan(
         f"{item['name']}=={item['version']}" for item in packages
     )
 
+    zetaris = ZetarisClient()
     summary = (
         cve_source
         if cve_source is not None
-        else cve_manger.fetch_latest_cves(packages=packages, fingerprints=fingerprints)
+        else cve_manger.fetch_latest_cves(
+            packages=packages, fingerprints=fingerprints, zetaris_client=zetaris,
+        )
     )
     matched = cve_manger.match_cves(summary.get("items") or [], packages)
     local_entries = load_all_cve_knowledge()
@@ -173,7 +177,7 @@ def run_scan(
         "local_cve_count": len(local_map),
     }
 
-    board = council or ThreatCouncil()
+    board = council or ThreatCouncil(zetaris=zetaris)
     session = board.analyze(
         prepared,
         company_hint=company_hint or prepared.get("url") or "uploaded-source",

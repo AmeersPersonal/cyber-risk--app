@@ -28,10 +28,10 @@ READ_PREFIXES = ("select", "show", "describe", "desc", "explain")
 
 
 def config_from_env():
+    base = (os.getenv("ZETARIS_BASE_URL") or "http://localhost:3000").rstrip("/")
     return {
-        "rest_url": (os.getenv("ZETARIS_REST_URL") or "http://localhost:8888/api/v1.0").rstrip(
-            "/"
-        ),
+        "base_url": base,
+        "query_path": "/api/proxy/sql-editor/sqls/run-query",
         "org_id": os.getenv("ZETARIS_ORG_ID") or "",
         "api_key": os.getenv("ZETARIS_API_KEY") or "",
         "query_limit": int(os.getenv("ZETARIS_QUERY_LIMIT") or "1000"),
@@ -57,7 +57,7 @@ def assert_readonly_sql(sql):
 
 
 class ZetarisClient:
-    """Direct REST adapter: POST /sql-editor/sqls/run-query."""
+    """REST adapter via the Zetaris UI proxy: POST /api/proxy/sql-editor/sqls/run-query."""
 
     def __init__(self, cfg=None, opener=None):
         self.cfg = cfg or config_from_env()
@@ -65,6 +65,23 @@ class ZetarisClient:
 
     def configured(self):
         return is_configured(self.cfg)
+
+    def _request(self, sql, limit=None):
+        url = f"{self.cfg['base_url']}{self.cfg['query_path']}"
+        body = {"sql": sql, "limit": limit or self.cfg["query_limit"]}
+        payload = json.dumps(body).encode("utf-8")
+        return urllib.request.Request(
+            url,
+            data=payload,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {self.cfg['api_key']}",
+                "X-Org-ID": str(self.cfg["org_id"]),
+                "X-Request-ID": str(uuid.uuid4()),
+                "Content-Type": "application/json",
+                "User-Agent": "CyberRiskCouncil/1.0",
+            },
+        )
 
     def run_sql(self, sql):
         sql = assert_readonly_sql(sql)
@@ -77,22 +94,8 @@ class ZetarisClient:
                 "error": "Zetaris is not configured; set ZETARIS_API_KEY and ZETARIS_ORG_ID",
             }
 
-        url = f"{self.cfg['rest_url']}/sql-editor/sqls/run-query"
-        payload = json.dumps({"sql": sql}).encode("utf-8")
-        request = urllib.request.Request(
-            url,
-            data=payload,
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {self.cfg['api_key']}",
-                "X-Org-ID": str(self.cfg["org_id"]),
-                "X-Request-ID": str(uuid.uuid4()),
-                "Content-Type": "application/json",
-                "User-Agent": "CyberRiskCouncil/1.0",
-            },
-        )
         try:
-            with self.opener(request, timeout=20) as resp:
+            with self.opener(self._request(sql), timeout=20) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
         except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError) as exc:
             return {
@@ -110,6 +113,26 @@ class ZetarisClient:
             "data": body.get("data") or [],
             "raw": body,
         }
+
+    def write_sql(self, sql):
+        """Execute a write statement (CREATE, INSERT, DROP) for admin/setup use."""
+        sql = " ".join((sql or "").strip().split())
+        if not sql:
+            raise ValueError("empty SQL")
+        if not self.configured():
+            return {
+                "ok": False,
+                "mode": "offline",
+                "error": "Zetaris is not configured; set ZETARIS_API_KEY and ZETARIS_ORG_ID",
+            }
+
+        try:
+            with self.opener(self._request(sql), timeout=20) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+        except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError) as exc:
+            return {"ok": False, "mode": "error", "error": str(exc)}
+
+        return {"ok": True, "mode": "zetaris", "raw": body}
 
     def company_threat_context(self, company_hint="", fingerprints=None):
         """Query Zetaris for company threat context, or return a local fallback."""
