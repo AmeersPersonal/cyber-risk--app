@@ -10,6 +10,28 @@ The application uses libraries to track the latest zero-day CVEs and tests the u
 
 These rules apply to every change in this repository.
 
+## Data and security
+
+Hackathon section 11 applies to every dataset, download, and API in this repository.
+
+### 11.1 Permitted
+
+- Publicly available datasets with appropriate licences
+- Small static datasets committed to the repository
+- Automated download scripts that need no login or manual steps
+- Public APIs called at runtime
+- Synthetic or simulated data, clearly identified
+
+### 11.2 Not permitted
+
+- Confidential, proprietary or restricted data the participant is not authorised to use
+- Personal data without authorisation and appropriate safeguards
+- Committed API keys, passwords, tokens, certificates or credentials
+- Datasets used in breach of their licence terms
+- Malware, exploit code, credential harvesting or harmful automation
+
+Do not commit API keys, passwords, tokens, certificates, or credentials. Do not add malware, exploit code, credential harvesting, or harmful automation. Label synthetic data as synthetic. A new data source must pass `backend/src/data_policy.py` before it is fetched or committed.
+
 ## Document the change
 
 After editing files in a folder, update that folder's `spec.md`. If that folder has no `spec.md`, create one. The spec records what changed in that folder.

@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 
 from packaging.version import InvalidVersion, Version
 
+from data_policy import permit_project_source
+
 CISA_KEV_URL = (
     "https://www.cisa.gov/sites/default/files/feeds/"
     "known_exploited_vulnerabilities.json"
@@ -366,6 +368,7 @@ def _rows_to_items(rows, headers=None):
 
 def fetch_cves_from_zetaris(zetaris_client, limit=50):
     """Query the CVE_PG.cve_items table in Zetaris. Returns (items, ok)."""
+    permit_project_source("zetaris_cve_items")
     sql = f"SELECT cve_id, vendor, product, name, date_added, description, cvss_score, severity, sources FROM CVE_PG.cve_items LIMIT {int(limit)}"
     result = zetaris_client.run_sql(sql)
     if not result.get("ok"):
@@ -378,11 +381,13 @@ def fetch_cves_from_zetaris(zetaris_client, limit=50):
 
 
 def fetch_cisa_kev(opener, limit=25):
+    permit_project_source("cisa_kev")
     payload = _http_json(CISA_KEV_URL, opener)
     return parse_kev(payload, limit=limit)
 
 
 def fetch_nist_nvd(opener, limit=25):
+    permit_project_source("nist_nvd")
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=7)
     query = urllib.parse.urlencode(
@@ -397,6 +402,7 @@ def fetch_nist_nvd(opener, limit=25):
 
 
 def fetch_osv_for_fingerprints(opener, fingerprints, limit=25):
+    permit_project_source("osv")
     items = []
     seen = set()
     packages = []
@@ -434,6 +440,7 @@ def fetch_osv_for_fingerprints(opener, fingerprints, limit=25):
 
 
 def fetch_kev_ids(opener):
+    permit_project_source("cisa_kev")
     payload = _http_json(CISA_KEV_URL, opener)
     return {
         entry.get("cveID")
@@ -443,6 +450,7 @@ def fetch_kev_ids(opener):
 
 
 def query_osv_version(opener, package, limit=15):
+    permit_project_source("osv")
     body = json.dumps(
         {
             "package": {"name": package["name"], "ecosystem": package["ecosystem"]},

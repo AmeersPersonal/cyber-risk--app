@@ -22,6 +22,12 @@ class GitIgnoreTests(unittest.TestCase):
 
     def test_secrets_and_local_analysis_artifacts_are_ignored(self):
         self.assertTrue(self.is_ignored(".env"))
+        self.assertTrue(self.is_ignored("secrets/api.pem"))
+        self.assertTrue(self.is_ignored("secrets/api.key"))
+        self.assertTrue(self.is_ignored("secrets/api.p12"))
+        self.assertTrue(self.is_ignored("secrets/api.pfx"))
+        self.assertTrue(self.is_ignored("credentials.json"))
+        self.assertTrue(self.is_ignored("secrets.json"))
         self.assertTrue(self.is_ignored("logs/analysis.log"))
         self.assertTrue(self.is_ignored("models/threat.safetensors"))
         self.assertTrue(self.is_ignored("intel_cache/feed.json"))

@@ -1,4 +1,5 @@
 {
+  "data_classification": "synthetic",
   "summary": {
     "tool_count": 13,
     "finding_count": 14,

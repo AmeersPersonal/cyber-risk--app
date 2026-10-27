@@ -1183,6 +1183,33 @@ class CveKnowledgeTests(unittest.TestCase):
         self.assertTrue(context["common_cves"])
         self.assertTrue(context["text"])
 
+    def test_common_list_includes_the_known_exploited_catalog(self):
+        path = Path(__file__).resolve().parent / "src" / "ai" / "cve_knowledge" / "common_cves.json"
+        names = json.loads(path.read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(names), 1000)
+        self.assertEqual(len(names), len(set(names)))
+        for cve_name in (
+            "CVE-2021-44228",
+            "CVE-2022-22965",
+            "CVE-2017-5638",
+            "CVE-2014-0160",
+            "CVE-2021-34527",
+            "CVE-2023-34362",
+            "CVE-2019-0708",
+            "CVE-2021-26855",
+            "CVE-2017-0144",
+        ):
+            self.assertIn(cve_name, names)
+        self.assertFalse(
+            (path.parent / "zero_days" / "CVE-2017-0144.json").exists()
+        )
+        initialize_cve_knowledge()
+        kept = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(kept, names)
+        self.assertFalse(
+            (path.parent / "zero_days" / "CVE-2017-0144.json").exists()
+        )
+
 
 class ZetarisCveIntegrationTests(unittest.TestCase):
     def _make_client(self, responses):
