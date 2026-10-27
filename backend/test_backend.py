@@ -1192,6 +1192,33 @@ class VersionMatchAndModelTests(unittest.TestCase):
         self.assertIn("lodash", names)
         self.assertNotIn("left-pad", names)
 
+    def test_lockfile_without_versions_does_not_hide_package_json(self):
+        empty = packages_from_files(
+            {
+                "package.json": json.dumps({"dependencies": {"left-pad": "1.2.3"}}),
+                "package-lock.json": json.dumps({"dependencies": {}}),
+            }
+        )
+        invalid = packages_from_files(
+            {
+                "package.json": json.dumps({"dependencies": {"left-pad": "1.2.3"}}),
+                "package-lock.json": json.dumps(
+                    {"dependencies": {"lodash": "4.17.21", "broken": {"name": "nope"}}}
+                ),
+            }
+        )
+        valid = packages_from_files(
+            {
+                "package.json": json.dumps({"dependencies": {"left-pad": "1.0.0"}}),
+                "package-lock.json": json.dumps(
+                    {"dependencies": {"lodash": {"version": "4.17.20"}}}
+                ),
+            }
+        )
+        self.assertEqual({item["name"] for item in empty}, {"left-pad"})
+        self.assertEqual({item["name"] for item in invalid}, {"left-pad"})
+        self.assertEqual({item["name"] for item in valid}, {"lodash"})
+
     def test_duplicate_findings_count_once(self):
         finding = {
             "tool": "injection",
