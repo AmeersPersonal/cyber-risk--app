@@ -1,0 +1,43 @@
+{
+  "title": "Sample moderated council round",
+  "session_id": "sample-session",
+  "round": 1,
+  "notes": "Shows a bare agree (rejected), a duplicate xss collision, and overlooked ssrf fill.",
+  "proposals": [
+    {
+      "agent": "recon",
+      "role": "surface mapper",
+      "argument": "recon (surface mapper): for a url target, next we should run pen_test because headers may leak stack fingerprints.",
+      "votes": ["pen_test", "misconfiguration"]
+    },
+    {
+      "agent": "attacker_mindset",
+      "role": "offensive analyst (defensive checks only)",
+      "argument": "attacker_mindset: prioritize xss and injection because reflected input paths are common on this kind of target.",
+      "votes": ["xss", "injection"]
+    },
+    {
+      "agent": "defender",
+      "role": "defensive hardening analyst",
+      "argument": "I agree",
+      "votes": ["xss", "csrf"]
+    },
+    {
+      "agent": "intel",
+      "role": "threat-intel / Zetaris analyst",
+      "argument": "intel: Zetaris rows mention web apps, so we should run supply_chain and pen_test due to dependency risk.",
+      "votes": ["supply_chain", "pen_test"]
+    },
+    {
+      "agent": "upload_forms",
+      "role": "content and transfer analyst",
+      "argument": "upload_forms: file_upload_abuse should run since transfer endpoints are often overlooked on this surface.",
+      "votes": ["file_upload_abuse", "csrf"]
+    }
+  ],
+  "expected": {
+    "invalid_agents": ["defender"],
+    "collision_types": ["unreasoned_stance", "duplicate_tool"],
+    "must_consider_overlooked": ["ssrf"]
+  }
+}
