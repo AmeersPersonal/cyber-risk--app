@@ -62,6 +62,25 @@ def _package_json(text, found):
                 _add(found, "npm", name, match.group(1))
 
 
+def _npm_name_from_path(path):
+    """Derive the npm package name from a node_modules path.
+
+    ``node_modules/@scope/pkg`` -> ``@scope/pkg``,
+    ``node_modules/pkg``        -> ``pkg``.
+    """
+    parts = Path(path).parts
+    # Walk backwards to the last ``node_modules`` segment.
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i] == "node_modules":
+            remainder = parts[i + 1:]
+            if not remainder:
+                return ""
+            if remainder[0].startswith("@") and len(remainder) >= 2:
+                return f"{remainder[0]}/{remainder[1]}"
+            return remainder[0]
+    return Path(path).name
+
+
 def _package_lock(text, found):
     try:
         data = json.loads(text)
@@ -76,7 +95,7 @@ def _package_lock(text, found):
             version = meta.get("version")
             if not version:
                 continue
-            name = meta.get("name") or Path(path).name
+            name = meta.get("name") or _npm_name_from_path(path)
             if not name:
                 continue
             _add(found, "npm", name, str(version))

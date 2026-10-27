@@ -7,9 +7,33 @@ export default defineConfig({
   envPrefix: ["VITE_", "API_"],
   server: {
     proxy: {
-      // Intercepts any frontend fetch starting with '/scan'
       "/scan": {
-        target: "http://localhost:8000", // Path to your backend server
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        secure: false,
+      },
+      "/verify": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        secure: false,
+      },
+      "/health": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        secure: false,
+      },
+      "/tools": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        secure: false,
+      },
+      "/cves": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        secure: false,
+      },
+      "/report": {
+        target: "http://localhost:8000",
         changeOrigin: true,
         secure: false,
       },

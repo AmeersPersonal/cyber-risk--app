@@ -1377,6 +1377,55 @@ class ZetarisCveIntegrationTests(unittest.TestCase):
         self.assertTrue(matched[0]["version_confirmed"])
         self.assertIn("cisa_kev", matched[0]["sources"])
 
+    def test_fetch_latest_cves_queries_all_packages(self):
+        """All packages are sent to OSV, not just the first 15."""
+        zetaris_rows = [
+            {
+                "cve_id": "CVE-Z-ALL",
+                "vendor": "npm",
+                "product": "vite",
+                "name": "CVE-Z-ALL",
+                "date_added": "2024-01-01",
+                "description": "test",
+                "cvss_score": "7.5",
+                "severity": "high",
+                "sources": "zetaris",
+            }
+        ]
+        zetaris_client, _ = self._make_client(
+            [{"headers": list(zetaris_rows[0].keys()), "data": zetaris_rows}]
+        )
+        queried_names = []
+
+        class Body:
+            def __init__(self, payload):
+                self._data = json.dumps(payload).encode("utf-8")
+            def read(self):
+                return self._data
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        def opener(request, timeout=20):
+            url = request.full_url
+            if "known_exploited" in url:
+                return Body({"vulnerabilities": []})
+            data = json.loads(request.data)
+            queried_names.append(data["package"]["name"])
+            return Body({"vulns": []})
+
+        packages = [
+            {"name": f"pkg-{i}", "version": "1.0.0", "ecosystem": "npm"}
+            for i in range(30)
+        ]
+        cve_manger.fetch_latest_cves(
+            opener=opener,
+            packages=packages,
+            zetaris_client=zetaris_client,
+        )
+        self.assertEqual(len(queried_names), 30)
+
     def test_setup_zetaris_insert_values(self):
         from ai.setup_zetaris import _insert_values, _escape_pg
 

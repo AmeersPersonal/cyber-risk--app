@@ -535,7 +535,7 @@ def fetch_latest_cves(opener=None, fingerprints=None, packages=None, limit=25, z
     """
     del fingerprints
     opener = opener or urllib.request.urlopen
-    packages = [item for item in (packages or []) if isinstance(item, dict)][:15]
+    packages = [item for item in (packages or []) if isinstance(item, dict)]
     errors = {}
     sources_ok = []
 

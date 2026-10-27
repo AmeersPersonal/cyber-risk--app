@@ -12,3 +12,4 @@ Implemented the backend scan API and NIST-aligned report builder around the thre
 - Scans are driven by the parallel Meterless council with debate-manager collision control. The council starts from the preloaded checks and can apply other named inspection methods to the same collected response or source. CVE intel is cross-checked across CISA KEV, NIST NVD, and OSV.
 
 `backend/test_backend.py` covers the report score/narrative/AAR, PDF rendering, arsenal, council, debate manager, Zetaris read-only guard, Scout routing, multi-source CVE merge, API health, and the PDF download routes.
+`test_manifests.py` covers scoped npm package name extraction from `node_modules` paths and verifies that `package-lock.json` parsing keeps `@scope/pkg` and `pkg` as separate entries.
