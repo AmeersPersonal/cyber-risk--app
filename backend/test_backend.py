@@ -28,7 +28,31 @@ from ai.meterless_scout import Scout
 from ai.model_client import parse_model_decision
 from ai.tool import ARSENAL, list_tools, run_tool
 from ai.zetaris_client import ZetarisClient, assert_readonly_sql
-from cyber_tools import access_control, clickjacking, injection, session, xss
+from cyber_tools import (
+    access_control,
+    clickjacking,
+    cloud_config,
+    cors,
+    ddos,
+    graphql,
+    injection,
+    insecure_deserialization,
+    jwt,
+    load_balancing,
+    oauth,
+    path_traversal,
+    prototype_pollution,
+    rate_limit,
+    security_logging,
+    sensitive_data,
+    session,
+    session_fixation,
+    ssti,
+    tls_posture,
+    user_enumeration,
+    xss,
+    xxe,
+)
 from report import after_action_report, build_report, render_pdf
 
 ATTACK_TYPE_TOOLS = {
@@ -47,6 +71,24 @@ ATTACK_TYPE_TOOLS = {
     "misconfiguration",
     "cryptographic_failures",
     "account_takeover",
+    "user_enumeration",
+    "ddos",
+    "rate_limit",
+    "load_balancing",
+    "cors",
+    "path_traversal",
+    "xxe",
+    "insecure_deserialization",
+    "ssti",
+    "oauth",
+    "jwt",
+    "prototype_pollution",
+    "graphql",
+    "session_fixation",
+    "security_logging",
+    "tls_posture",
+    "sensitive_data",
+    "cloud_config",
 }
 
 
@@ -55,6 +97,20 @@ def _load_api_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _test_client(app):
+    here = str(SRC)
+    if here in sys.path:
+        sys.path.remove(here)
+    sys.modules.pop("fastapi", None)
+    try:
+        from fastapi.testclient import TestClient
+    except ImportError:
+        sys.path.insert(0, here)
+        raise unittest.SkipTest("fastapi is not installed")
+    sys.path.insert(0, here)
+    return TestClient(app)
 
 
 def _api_client():
@@ -82,10 +138,25 @@ class ArsenalTests(unittest.TestCase):
         self.assertEqual(names, expected)
         self.assertTrue(ATTACK_TYPE_TOOLS.issubset(names))
 
-    def test_unknown_tool_is_rejected(self):
-        result = run_tool("custom_exploit_script", {"kind": "source", "files": {}})
+    def test_additional_method_reviews_collected_source(self):
+        result = run_tool(
+            "certificate_transparency",
+            {"kind": "source", "files": {"app.py": "print('ok')"}},
+        )
+        self.assertEqual(result["status"], "info")
+        self.assertEqual(result["tool"], "certificate_transparency")
+        self.assertIn("starting set", result["findings"][0]["detail"])
+
+    def test_stay_inspect_overrides_extra_methods(self):
+        skipped = run_tool(
+            "certificate_transparency",
+            {"kind": "source", "files": {"app.py": "print('ok')"}, "stay_inspect": True},
+        )
+        self.assertEqual(skipped["findings"][0]["title"], "Command overridden by stay-inspect")
+
+    def test_command_shaped_method_is_rejected(self):
+        result = run_tool("nmap -sV", {"kind": "source", "files": {}})
         self.assertEqual(result["status"], "error")
-        self.assertIn("preloaded arsenal", result["findings"][0]["detail"])
 
 
 class ToolCheckTests(unittest.TestCase):
@@ -155,6 +226,329 @@ class ToolCheckTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "fail")
         self.assertEqual(result["findings"][0]["severity"], "high")
+
+    def test_user_enumeration_flags_distinct_login_message(self):
+        result = user_enumeration.run(
+            {
+                "kind": "source",
+                "files": {
+                    "auth.py": "def login(user):\n    if not user:\n        return 'user not found'\n"
+                },
+            }
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["findings"][0]["severity"], "medium")
+
+    def test_user_enumeration_accepts_generic_login_message(self):
+        result = user_enumeration.run(
+            {
+                "kind": "source",
+                "files": {
+                    "auth.py": "def login(user):\n    return 'invalid email or password'\n"
+                },
+            }
+        )
+        self.assertEqual(result["status"], "pass")
+
+    def test_user_enumeration_does_not_probe_a_live_url(self):
+        result = user_enumeration.run(
+            {
+                "kind": "url",
+                "url": "https://example.test/login",
+                "http": {"status": 200, "headers": {}, "body": "Sign in"},
+            }
+        )
+        self.assertEqual(result["status"], "info")
+        self.assertIn("not run", result["findings"][0]["title"].lower())
+
+    def test_ddos_flags_missing_request_cap(self):
+        result = ddos.run({"kind": "source", "files": {"app.py": "def index():\n    return 'ok'\n"}})
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("cap", result["findings"][0]["title"].lower())
+
+    def test_ddos_accepts_body_limit_without_sending_traffic(self):
+        result = ddos.run(
+            {
+                "kind": "source",
+                "files": {"app.py": "app.config['MAX_CONTENT_LENGTH'] = 1000000\n"},
+            }
+        )
+        self.assertEqual(result["status"], "pass")
+
+    def test_ddos_reads_edge_header_only(self):
+        result = ddos.run(
+            {
+                "kind": "url",
+                "url": "https://example.test",
+                "http": {"status": 200, "headers": {"cf-ray": "abc"}, "body": ""},
+            }
+        )
+        self.assertEqual(result["status"], "pass")
+
+    def test_rate_limit_flags_login_without_limiter(self):
+        result = rate_limit.run(
+            {
+                "kind": "source",
+                "files": {"app.py": "@app.route('/login')\ndef login():\n    return 'ok'\n"},
+            }
+        )
+        self.assertEqual(result["status"], "fail")
+
+    def test_rate_limit_accepts_limiter_on_login(self):
+        result = rate_limit.run(
+            {
+                "kind": "source",
+                "files": {
+                    "app.py": "from flask_limiter import Limiter\n@app.route('/login')\ndef login():\n    return 'ok'\n"
+                },
+            }
+        )
+        self.assertEqual(result["status"], "pass")
+
+    def test_rate_limit_reads_policy_headers_only(self):
+        missing = rate_limit.run(
+            {
+                "kind": "url",
+                "url": "https://example.test/login",
+                "http": {"status": 200, "headers": {}, "body": ""},
+            }
+        )
+        limited = rate_limit.run(
+            {
+                "kind": "url",
+                "url": "https://example.test/login",
+                "http": {"status": 429, "headers": {}, "body": ""},
+            }
+        )
+        self.assertEqual(missing["status"], "fail")
+        self.assertEqual(limited["status"], "pass")
+
+    def test_load_balancing_flags_untrusted_forwarded_address(self):
+        result = load_balancing.run(
+            {
+                "kind": "source",
+                "files": {"app.py": "ip = request.headers.get('X-Forwarded-For')\n"},
+            }
+        )
+        self.assertEqual(result["status"], "fail")
+
+    def test_load_balancing_accepts_trusted_proxy(self):
+        result = load_balancing.run(
+            {
+                "kind": "source",
+                "files": {
+                    "app.py": "from werkzeug.middleware.proxy_fix import ProxyFix\nip = request.headers.get('X-Forwarded-For')\n"
+                },
+            }
+        )
+        self.assertEqual(result["status"], "pass")
+
+    def test_load_balancing_flags_memory_sessions_behind_balancer(self):
+        result = load_balancing.run(
+            {
+                "kind": "source",
+                "files": {
+                    "nginx.conf": "upstream app_servers {\n    proxy_pass http://app;\n}\n",
+                    "app.py": "session['user'] = user_id\n",
+                },
+            }
+        )
+        self.assertEqual(result["status"], "fail")
+
+    def test_scout_routes_availability_prompt(self):
+        decision = Scout().decide(prompt="check ddos and load balancer hardening", used_tools=[])
+        self.assertEqual(decision["intent"]["primary"], "threat.availability")
+        planned = {item["tool"] for item in decision["toolPlan"]}
+        self.assertTrue({"ddos", "rate_limit", "load_balancing"} <= planned)
+
+    def test_added_tools_flag_unsafe_patterns_and_accept_hardened_ones(self):
+        cases = [
+            (
+                "cors",
+                cors,
+                {
+                    "kind": "url",
+                    "url": "https://example.test",
+                    "http": {
+                        "headers": {
+                            "access-control-allow-origin": "*",
+                            "access-control-allow-credentials": "true",
+                        }
+                    },
+                },
+                "fail",
+            ),
+            (
+                "cors-allow",
+                cors,
+                {
+                    "kind": "url",
+                    "url": "https://example.test",
+                    "http": {"headers": {"access-control-allow-origin": "https://app.example"}},
+                },
+                "pass",
+            ),
+            (
+                "path",
+                path_traversal,
+                {"kind": "source", "files": {"app.py": 'open(os.path.join(base, request.args.get("file")))\n'}},
+                "fail",
+            ),
+            (
+                "path-guard",
+                path_traversal,
+                {"kind": "source", "files": {"app.py": "open(os.path.join(base, secure_filename(name)))\n"}},
+                "pass",
+            ),
+            (
+                "xxe",
+                xxe,
+                {"kind": "source", "files": {"app.py": 'etree.parse(request.files["xml"])\n'}},
+                "fail",
+            ),
+            (
+                "xxe-safe",
+                xxe,
+                {"kind": "source", "files": {"app.py": "import defusedxml\netree.parse(data)\n"}},
+                "pass",
+            ),
+            (
+                "deser",
+                insecure_deserialization,
+                {"kind": "source", "files": {"app.py": "pickle.loads(request.data)\n"}},
+                "fail",
+            ),
+            (
+                "deser-safe",
+                insecure_deserialization,
+                {"kind": "source", "files": {"app.py": "yaml.safe_load(request.data)\n"}},
+                "pass",
+            ),
+            (
+                "ssti",
+                ssti,
+                {"kind": "source", "files": {"app.py": 'return render_template_string(request.args.get("name"))\n'}},
+                "fail",
+            ),
+            (
+                "oauth",
+                oauth,
+                {"kind": "source", "files": {"app.py": 'redirect_uri = request.args.get("redirect_uri")\n'}},
+                "fail",
+            ),
+            (
+                "oauth-state",
+                oauth,
+                {"kind": "source", "files": {"app.py": "def oauth_login():\n    state = token\n    return state\n"}},
+                "pass",
+            ),
+            (
+                "jwt",
+                jwt,
+                {"kind": "source", "files": {"app.js": 'localStorage.setItem("jwt", token)\n'}},
+                "fail",
+            ),
+            (
+                "jwt-exp",
+                jwt,
+                {
+                    "kind": "source",
+                    "files": {"app.js": 'jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "15m" })\n'},
+                },
+                "pass",
+            ),
+            (
+                "proto",
+                prototype_pollution,
+                {"kind": "source", "files": {"app.js": "Object.assign({}, req.body)\n"}},
+                "fail",
+            ),
+            (
+                "graphql",
+                graphql,
+                {"kind": "source", "files": {"app.js": "new ApolloServer({ introspection: true })\n"}},
+                "fail",
+            ),
+            (
+                "graphql-limited",
+                graphql,
+                {
+                    "kind": "source",
+                    "files": {"app.js": "new ApolloServer({ introspection: false, validationRules: [depthLimit(6)] })\n"},
+                },
+                "pass",
+            ),
+            (
+                "fixation",
+                session_fixation,
+                {"kind": "source", "files": {"app.py": 'def login():\n    session["user"] = user.id\n'}},
+                "fail",
+            ),
+            (
+                "fixation-rotate",
+                session_fixation,
+                {
+                    "kind": "source",
+                    "files": {"app.py": 'def login():\n    session.regenerate()\n    session["user"] = user.id\n'},
+                },
+                "pass",
+            ),
+            (
+                "logging",
+                security_logging,
+                {"kind": "source", "files": {"app.py": "def login():\n    return 'ok'\n"}},
+                "fail",
+            ),
+            (
+                "logging-present",
+                security_logging,
+                {"kind": "source", "files": {"app.py": "def login():\n    logger.info('login')\n"}},
+                "pass",
+            ),
+            (
+                "tls",
+                tls_posture,
+                {"kind": "url", "url": "https://example.test", "http": {"headers": {}}},
+                "fail",
+            ),
+            (
+                "tls-hsts",
+                tls_posture,
+                {
+                    "kind": "url",
+                    "url": "https://example.test",
+                    "http": {"headers": {"strict-transport-security": "max-age=31536000"}},
+                },
+                "pass",
+            ),
+            (
+                "tls-source",
+                tls_posture,
+                {"kind": "source", "files": {"app.py": "ctx.verify = False\n"}},
+                "fail",
+            ),
+            (
+                "sensitive",
+                sensitive_data,
+                {"kind": "source", "files": {"app.py": 'return {"password_hash": user.password_hash}\n'}},
+                "fail",
+            ),
+            (
+                "cloud",
+                cloud_config,
+                {"kind": "source", "files": {"Dockerfile": "FROM python:3.12\nUSER root\n"}},
+                "fail",
+            ),
+            (
+                "cloud-user",
+                cloud_config,
+                {"kind": "source", "files": {"Dockerfile": "FROM python:3.12\nUSER app\n"}},
+                "pass",
+            ),
+        ]
+        for label, tool, target, status in cases:
+            with self.subTest(label):
+                self.assertEqual(tool.run(target)["status"], status)
 
 
 class ScanAndCveTests(unittest.TestCase):
@@ -461,7 +855,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(body["status"], "ok")
         self.assertIn("zetaris_configured", body["engines"])
         self.assertIn("meterless", body["engines"])
-        self.assertEqual(len(tools.json()["tools"]), 18)
+        self.assertEqual(len(tools.json()["tools"]), 36)
         self.assertEqual(client.get("/").status_code, 404)
 
     def test_report_pdf_route_returns_attachment(self):
@@ -502,10 +896,29 @@ class ApiTests(unittest.TestCase):
         original = scan_main.run_scan
         scan_main.run_scan = lambda *args, **kwargs: sample
         try:
-            client = _api_client()
-            pdf = client.post("/scan/url?format=pdf", json={"url": "https://example.com"})
-            kept = client.post("/scan/url", json={"url": "https://example.com"})
-            rejected = client.post("/scan/url?format=xml", json={"url": "https://example.com"})
+            app = _load_api_module().create_app()
+            app.state.resolve = lambda host, port: [(None, None, None, None, ("93.184.216.34", 0))]
+
+            def owned_body():
+                issued = app.state.ownership.issue_url(
+                    "https://example.com", resolve=app.state.resolve
+                )
+                app.state.proof_reader = lambda url, resolve=None: issued["token"]
+                return {"url": "https://example.com", "ownership_token": issued["token"]}
+
+            client = _test_client(app)
+            pdf = client.post("/scan/url?format=pdf", json=owned_body())
+            kept = client.post("/scan/url", json=owned_body())
+            rejected = client.post("/scan/url?format=xml", json=owned_body())
+            missing = client.post("/scan/url", json={"url": "https://example.com"})
+            wrong = app.state.ownership.issue_url(
+                "https://example.com", resolve=app.state.resolve
+            )
+            app.state.proof_reader = lambda url, resolve=None: "not-the-token"
+            mismatched = client.post(
+                "/scan/url",
+                json={"url": "https://example.com", "ownership_token": wrong["token"]},
+            )
         finally:
             scan_main.run_scan = original
         self.assertEqual(pdf.status_code, 200)
@@ -516,6 +929,103 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(kept.status_code, 200)
         self.assertEqual(kept.json()["narrative"], "Patched scan.")
         self.assertEqual(rejected.status_code, 400)
+        self.assertEqual(missing.status_code, 422)
+        self.assertEqual(mismatched.status_code, 403)
+        blocked = client.post(
+            "/scan/url",
+            json={
+                "url": "https://example.com",
+                "ownership_token": "unused",
+                "stay_inspect": True,
+            },
+        )
+        self.assertEqual(blocked.status_code, 403)
+        self.assertIn("override", blocked.json()["detail"].lower())
+
+    def test_run_scan_refuses_a_mismatched_owner_before_agents(self):
+        import safety
+
+        class Council:
+            def analyze(self, *args, **kwargs):
+                raise AssertionError("agents ran")
+
+        with self.assertRaises(safety.UnsafeTarget):
+            run_scan(
+                {
+                    "kind": "source",
+                    "files": {"app.py": "Copyright (c) 2024 Other Person\n"},
+                },
+                council=Council(),
+                company_hint="Acme",
+            )
+        with self.assertRaises(safety.UnsafeTarget):
+            run_scan(
+                {"kind": "url", "url": "https://example.com"},
+                council=Council(),
+            )
+
+    def test_source_scan_refuses_a_mismatched_owner(self):
+        from ai import main as scan_main
+
+        sample = {
+            "summary": {"nist_score": 1, "nist_rating": "Low", "finding_count": 0, "severity": {}},
+            "narrative": "Source accepted.",
+            "findings": [],
+            "nist": {},
+            "cves": {},
+            "after_action_report": {"next_steps": []},
+            "target": {"kind": "source"},
+        }
+        original = scan_main.run_scan
+        scan_main.run_scan = lambda *args, **kwargs: sample
+        try:
+            app = _load_api_module().create_app()
+            client = _test_client(app)
+            issued = client.post("/verify/source").json()
+            private = client.post("/verify/url", json={"url": "http://127.0.0.1"})
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w") as archive:
+                archive.writestr("app.py", "print(1)")
+                archive.writestr("cyber-risk-owner.txt", issued["token"])
+            payload = buffer.getvalue()
+            good = client.post(
+                "/scan/source",
+                files={"archive": ("app.zip", payload, "application/zip")},
+                params={"ownership_token": issued["token"]},
+            )
+            bare = io.BytesIO()
+            with zipfile.ZipFile(bare, "w") as archive:
+                archive.writestr("app.py", "print(1)")
+            unlabeled = client.post(
+                "/scan/source",
+                files={"archive": ("app.zip", bare.getvalue(), "application/zip")},
+            )
+            mismatch = io.BytesIO()
+            with zipfile.ZipFile(mismatch, "w") as archive:
+                archive.writestr("app.py", "Copyright (c) 2024 Other Person\nprint(1)\n")
+            refused = client.post(
+                "/scan/source",
+                files={"archive": ("app.zip", mismatch.getvalue(), "application/zip")},
+                params={"company": "Acme"},
+            )
+            other = client.post("/verify/source").json()
+            wrong = io.BytesIO()
+            with zipfile.ZipFile(wrong, "w") as archive:
+                archive.writestr("app.py", "print(1)")
+                archive.writestr("cyber-risk-owner.txt", "not-the-token")
+            bad_token = client.post(
+                "/scan/source",
+                files={"archive": ("app.zip", wrong.getvalue(), "application/zip")},
+                params={"ownership_token": other["token"]},
+            )
+        finally:
+            scan_main.run_scan = original
+        self.assertEqual(private.status_code, 403)
+        self.assertEqual(good.status_code, 200)
+        self.assertEqual(good.json()["narrative"], "Source accepted.")
+        self.assertEqual(unlabeled.status_code, 200)
+        self.assertEqual(refused.status_code, 403)
+        self.assertEqual(bad_token.status_code, 403)
 
 
 class CveKnowledgeTests(unittest.TestCase):
@@ -579,7 +1089,7 @@ class CouncilAndIntegrationTests(unittest.TestCase):
             max_tools=3,
         )
         self.assertIn("executionContract", decision)
-        self.assertEqual(decision["executionContract"]["policy"], "defensive_arsenal_only")
+        self.assertEqual(decision["executionContract"]["policy"], "arsenal_first_open_methods")
         self.assertTrue(decision["toolPlan"])
 
     def test_council_agents_debate_and_choose_tools(self):
@@ -699,13 +1209,13 @@ class VersionMatchAndModelTests(unittest.TestCase):
         self.assertEqual(report["summary"]["finding_count"], 1)
         self.assertEqual(report["summary"]["severity"]["high"], 1)
 
-    def test_model_decision_drops_unknown_tools(self):
+    def test_model_decision_keeps_methods_outside_the_starting_set(self):
         parsed = parse_model_decision(
-            '```json\n{"argument":"Check injection because the handler builds a query.","votes":["injection","not_a_tool"]}\n```',
+            '```json\n{"argument":"Check injection because the handler builds a query.","votes":["injection","not_a_tool","nmap -sV"]}\n```',
             ["injection", "xss"],
         )
-        self.assertEqual(parsed["votes"], ["injection"])
-        self.assertNotIn("not_a_tool", parsed["votes"])
+        self.assertEqual(parsed["votes"], ["injection", "not_a_tool"])
+        self.assertNotIn("nmap -sV", parsed["votes"])
 
     def test_council_uses_model_votes_when_configured(self):
         class FakeModel:
@@ -728,10 +1238,12 @@ class VersionMatchAndModelTests(unittest.TestCase):
             company_hint="Acme",
         )
         votes = [vote for proposal in session["debate"][0]["proposals"] for vote in proposal["votes"]]
-        self.assertNotIn("not_a_tool", votes)
+        self.assertIn("not_a_tool", votes)
+        self.assertIn("injection", votes)
         self.assertTrue(all(proposal.get("source") == "model" for proposal in session["debate"][0]["proposals"]))
         self.assertEqual(session["engines"]["meterless_model"], "meterless-chat")
-        self.assertIn("do not invent tools", model.last[0]["content"].lower())
+        self.assertIn("starting set", model.last[0]["content"].lower())
+        self.assertIn("not_a_tool", [item.get("tool") for item in session["tool_results"]])
 
     def test_version_query_badges_kev(self):
         class Body:

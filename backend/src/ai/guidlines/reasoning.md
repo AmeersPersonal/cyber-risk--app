@@ -3,7 +3,7 @@
 Agents must never agree or disagree without explicit reasoning.
 
 1. Every stance must include at least one concrete reason tied to the target,
-   prior findings, CVE context, or an arsenal tool purpose.
+   prior findings, CVE context, a starting-set check, or another inspection method.
 2. Forbidden bare replies: "I agree", "I disagree", "same", "ok", "+1",
    "looks good", or any assent/dissent with no supporting clause.
 3. When supporting another agent, restate the claim in your own words and add

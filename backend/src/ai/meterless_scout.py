@@ -9,7 +9,16 @@ INTENT_REGISTRY = {
         "risk": "low",
     },
     "threat.inject": {
-        "tools": ["injection", "xss", "ssrf"],
+        "tools": [
+            "injection",
+            "xss",
+            "ssrf",
+            "path_traversal",
+            "xxe",
+            "ssti",
+            "insecure_deserialization",
+            "prototype_pollution",
+        ],
         "risk": "medium",
     },
     "threat.auth": {
@@ -19,7 +28,16 @@ INTENT_REGISTRY = {
             "csrf",
             "account_takeover",
             "access_control",
+            "user_enumeration",
+            "oauth",
+            "jwt",
+            "session_fixation",
+            "security_logging",
         ],
+        "risk": "medium",
+    },
+    "threat.availability": {
+        "tools": ["ddos", "rate_limit", "load_balancing", "denial_of_service"],
         "risk": "medium",
     },
     "threat.upload": {
@@ -28,6 +46,10 @@ INTENT_REGISTRY = {
     },
     "threat.crypto_api": {
         "tools": ["cryptographic_failures", "api_mass_assignment", "business_logic", "denial_of_service"],
+        "risk": "medium",
+    },
+    "threat.platform": {
+        "tools": ["cors", "tls_posture", "graphql", "sensitive_data", "cloud_config"],
         "risk": "medium",
     },
     "threat.done": {
@@ -44,8 +66,10 @@ def _score_intent(prompt, intent_name, used_tools):
     score = 0.05 * len(available)
     keywords = {
         "threat.recon": ("recon", "header", "https", "misconfig", "surface", "url"),
-        "threat.inject": ("inject", "xss", "sql", "ssrf", "source", "sink"),
-        "threat.auth": ("auth", "session", "csrf", "login", "token", "access"),
+        "threat.inject": ("inject", "xss", "sql", "ssrf", "source", "sink", "traversal", "xxe", "template", "deserial"),
+        "threat.platform": ("cors", "tls", "graphql", "docker", "cloud", "certificate"),
+        "threat.auth": ("auth", "session", "csrf", "login", "token", "access", "enumerat"),
+        "threat.availability": ("ddos", "rate limit", "ratelimit", "load balanc", "availability"),
         "threat.upload": ("upload", "file", "form", "csp"),
         "threat.crypto_api": ("crypto", "secret", "api", "price", "rate", "dos"),
         "threat.done": ("done", "complete", "enough", "stop"),
@@ -85,7 +109,7 @@ class Scout:
             "toolPlan": tool_plan,
             "user": user or {"id": "council", "role": "analyst"},
             "surface": surface,
-            "policy": "defensive_arsenal_only",
+            "policy": "arsenal_first_open_methods",
         }
         return {
             "intent": contract["intent"],

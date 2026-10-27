@@ -76,8 +76,14 @@ class ModelClient:
             return None
 
 
-def parse_model_decision(text, allowed_tools):
-    """Read a JSON vote. Unknown tool names are dropped."""
+def parse_model_decision(text, allowed_tools, stay_inspect=False):
+    """Read a JSON vote.
+
+    `allowed_tools` is the convenient starting set passed by the council.
+    Other snake_case inspection methods are kept. Command strings are dropped.
+    """
+    from ai.tool import normalize_method
+
     if not text:
         return None
     raw = text.strip()
@@ -97,13 +103,15 @@ def parse_model_decision(text, allowed_tools):
     if not isinstance(data, dict):
         return None
     argument = " ".join(str(data.get("argument") or "").split())
-    allowed = set(allowed_tools or [])
     votes = []
     for name in data.get("votes") or []:
-        if name in allowed and name not in votes:
-            votes.append(name)
+        method = normalize_method(name)
+        if method and method not in votes:
+            if stay_inspect and method not in set(allowed_tools or []):
+                continue
+            votes.append(method)
     if not argument or not votes:
         return None
     if not _REASON.search(argument):
         argument += " This is the next check because those tools match the evidence so far."
-    return {"argument": argument[:1200], "votes": votes[:3]}
+    return {"argument": argument[:1200], "votes": votes[:4]}
