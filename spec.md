@@ -35,6 +35,14 @@ Added a root README for the GenWorks Open Agent Hackathon. It describes the insp
 
 `backend/src/test_readme.py` checks that the hackathon, education, and liability language is present.
 
+## Data and security
+
+Added hackathon rules 11.1 and 11.2 to the README and to `AGENTS.md`. Permitted data is a public dataset with a licence, a small static dataset in the repo, an automated download with no login or manual step, a public API called at runtime, or synthetic data that is clearly labeled. Restricted data, unauthorised personal data, committed secrets, licence breaches, and malware or exploit code are refused.
+
+`backend/src/data_policy.py` checks those rules before a project data source is fetched or loaded. `.gitignore` also ignores key and certificate files (`*.key`, `*.p12`, `*.pfx`) along with the existing secret files.
+
+`backend/src/test_data_policy.py` checks the rule text, the refusals, and the sources this repository uses.
+
 ## frontend
 
 Removed the temporary scan page (`frontend/`) and the backend routes that served it. A separate frontend will be added later. The scan API remains.

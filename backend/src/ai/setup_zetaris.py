@@ -198,6 +198,9 @@ def register_datasource(client):
 
 def fetch_all_cves(limit=50):
     """Fetch CVEs from all three public sources and merge them."""
+    from data_policy import permit_project_source
+
+    permit_project_source("setup_zetaris")
     opener = urllib.request.urlopen
     groups = []
     sources_ok = []

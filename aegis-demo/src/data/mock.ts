@@ -1,4 +1,7 @@
 import type { Agent, AgentId, Analysis } from "../types";
+
+/** Synthetic or simulated data. These analyses are not scans of a real system. */
+export const DATA_CLASSIFICATION = "synthetic";
 export const agents: Agent[] = [
   {
     id: "dependency",

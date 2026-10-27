@@ -1,12 +1,14 @@
 """Local CVE knowledge base for agent context and after-action defenses.
 
-On initialization, common CVE names are stored in common_cves.json and each
-entry has a matching zero_days/<cve_name>.json file with how it works and how
-to defend against it.
+On initialization, common CVE names stay in common_cves.json. Seeded entries
+have a matching zero_days/<cve_name>.json file with how it works and how to
+defend against it. Catalog IDs do not each get a file.
 """
 
 import json
 from pathlib import Path
+
+from data_policy import assert_static_dataset_text, permit_project_source
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent / "cve_knowledge"
 COMMON_LIST_PATH = KNOWLEDGE_DIR / "common_cves.json"
@@ -125,20 +127,39 @@ def write_cve_file(entry, root=None):
         "how_it_works": entry["how_it_works"],
         "defend_against": entry["defend_against"],
     }
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    text = json.dumps(payload, indent=2)
+    assert_static_dataset_text(text, "cve_knowledge")
+    path.write_text(text, encoding="utf-8")
     return path
 
 
 def initialize_cve_knowledge(force=False, knowledge_dir=None):
-    """Create the local common CVE list and per-CVE zero-day JSON files."""
+    """Keep the common CVE list and write zero-day files for seeded entries."""
+    permit_project_source("cve_knowledge")
     base = Path(knowledge_dir) if knowledge_dir else KNOWLEDGE_DIR
     common_path = base / "common_cves.json"
     zero_dir = base / "zero_days"
     zero_dir.mkdir(parents=True, exist_ok=True)
 
     names = [item["cve_name"] for item in _SEED]
-    if force or not common_path.exists() or common_path.stat().st_size == 0:
-        common_path.write_text(json.dumps(names, indent=2), encoding="utf-8")
+    listed = []
+    if common_path.exists() and common_path.stat().st_size > 0 and not force:
+        try:
+            loaded = json.loads(common_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            loaded = []
+        if isinstance(loaded, list):
+            listed = [str(item) for item in loaded if item]
+    if force or not listed:
+        listed = list(names)
+    else:
+        for name in names:
+            if name not in listed:
+                listed.append(name)
+    text = json.dumps(listed, indent=2) + "\n"
+    current = common_path.read_text(encoding="utf-8") if common_path.exists() else ""
+    if current != text:
+        common_path.write_text(text, encoding="utf-8")
 
     written = []
     for entry in _SEED:
@@ -146,32 +167,6 @@ def initialize_cve_knowledge(force=False, knowledge_dir=None):
         if force or not path.exists():
             write_cve_file(entry, root=zero_dir)
             written.append(entry["cve_name"])
-        else:
-            # Keep list membership even if file already exists.
-            pass
-
-    # Ensure every name in the common list has a file; create a stub if missing.
-    try:
-        listed = json.loads(common_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        listed = names
-        common_path.write_text(json.dumps(names, indent=2), encoding="utf-8")
-
-    for cve_name in listed:
-        path = zero_day_path(cve_name, root=zero_dir)
-        if not path.exists():
-            write_cve_file(
-                {
-                    "cve_name": cve_name,
-                    "how_it_works": "Details not yet populated for this CVE.",
-                    "defend_against": (
-                        "Apply vendor patches, reduce exposure of the affected service, "
-                        "and monitor for related indicators of compromise."
-                    ),
-                },
-                root=zero_dir,
-            )
-            written.append(cve_name)
 
     return {
         "common_list": str(common_path),
@@ -198,7 +193,9 @@ def load_cve_entry(cve_name, knowledge_dir=None):
     if not path.exists():
         return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        assert_static_dataset_text(text, "cve_knowledge")
+        data = json.loads(text)
     except json.JSONDecodeError:
         return None
     if not isinstance(data, dict):
