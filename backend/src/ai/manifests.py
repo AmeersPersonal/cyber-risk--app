@@ -86,10 +86,12 @@ def _package_lock(text, found):
     deps = data.get("dependencies")
     if not isinstance(deps, dict):
         return False
+    added = False
     for name, meta in deps.items():
         if isinstance(meta, dict) and meta.get("version"):
             _add(found, "npm", name, str(meta["version"]))
-    return True
+            added = True
+    return added
 
 
 def _go_mod(text, found):

@@ -1,22 +1,21 @@
 # Future implementations
 
-These two items are written down so they are not lost. They are not part of the current scan behavior.
+Ownership proof and the public-host checks are now required by the scan API. Stay-inspect mode is optional and off unless the caller presses override.
 
 ## 2. Confirm the target before scanning it
 
-The API still fetches any http or https URL the caller sends, and it follows redirects.
+Done in `safety.py` and the scan routes:
 
-Later work:
-
-- Ask the user to confirm they are allowed to scan that target before the GET runs.
-- Refuse loopback, private, and link-local addresses.
-- Refuse a redirect that lands on one of those addresses.
-- Keep a size cap on uploaded archives, including the total unzipped size and the number of files.
-
-Until that exists, run the API on localhost and only point it at sites you own.
+- `/verify/url` issues a token that the site must publish at `/.well-known/cyber-risk-verify.txt`.
+- `/verify/source` issues a token for `cyber-risk-owner.txt` at the archive root. If that file or another owner label is present, it must match the caller or the scan is refused. Source with no owner label is scanned as theirs.
+- Loopback, private, and link-local hosts are refused.
+- The ownership file must not redirect. A scan redirect to a forbidden address is refused.
+- Uploaded archives are capped by size, file count, and path.
 
 ## 6. Stay inspect-only
 
-The product inspects a response or uploaded source and matches known vulnerabilities to installed versions. It does not send attack traffic, and it does not run exploit code.
+Done. Stay-inspect mode is optional and off by default.
 
-If a safe environment is added later, it should run inspection and dependency checks only. It should not execute exploit kits or “test the app against a zero-day” by attacking it. Historical CVE notes in the knowledge folder stay case studies for remediation text.
+- A scan keeps the current council command unless `stay_inspect` is true.
+- Turning it on also requires `override_command: true`. That flag is the button. Without it the request is refused.
+- When both are set, votes outside the preloaded checks are dropped and those commands are not run.

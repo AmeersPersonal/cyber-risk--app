@@ -1,8 +1,10 @@
 # Arsenal and attack-coverage guidelines
 
-1. Agents may only propose tools registered in the defensive arsenal.
+1. The preloaded arsenal is the convenient starting set, not a closed list.
+   Agents may also propose other inspection methods that are not implemented
+   in this repo. Name those methods in snake_case.
 2. Arguments must stay educational and defensive: inspect a URL GET or uploaded
-   source; do not request exploit payloads or unauthorized access steps.
+   source; do not request exploit payloads, flood traffic, or unauthorized access steps.
 3. Each round should surface at least one overlooked surface if votes cluster on
    the same few tools (for example upload abuse, SSRF, CSRF, or misconfiguration).
 4. Intel and CVE briefs inform priority, but they do not replace a reasoned tool vote.

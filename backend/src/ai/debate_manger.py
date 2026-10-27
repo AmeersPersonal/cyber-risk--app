@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 from uuid import uuid4
 
-from ai.tool import ARSENAL
+from ai.tool import ARSENAL, normalize_method
 
 AI_DIR = Path(__file__).resolve().parent
 GUIDLINES_DIR = AI_DIR / "guidlines"
@@ -55,6 +55,24 @@ class DebateManager:
         "broken_authentication",
         "cryptographic_failures",
         "supply_chain",
+        "user_enumeration",
+        "ddos",
+        "rate_limit",
+        "load_balancing",
+        "cors",
+        "path_traversal",
+        "xxe",
+        "insecure_deserialization",
+        "ssti",
+        "oauth",
+        "jwt",
+        "prototype_pollution",
+        "graphql",
+        "session_fixation",
+        "security_logging",
+        "tls_posture",
+        "sensitive_data",
+        "cloud_config",
     )
 
     def __init__(
@@ -190,11 +208,12 @@ class DebateManager:
             check = self.validate_argument(proposal.get("argument"))
             weight = 2 if check["ok"] else 0
             for index, tool in enumerate(proposal.get("votes") or []):
-                if tool in used_tools or tool not in ARSENAL:
+                method = normalize_method(tool)
+                if not method or method in used_tools:
                     continue
                 rank = max(3 - index, 1)
-                scores[tool] = scores.get(tool, 0) + weight * rank
-                reasons.setdefault(tool, []).append(
+                scores[method] = scores.get(method, 0) + weight * rank
+                reasons.setdefault(method, []).append(
                     {
                         "agent": agent,
                         "argument": proposal.get("argument"),
@@ -220,7 +239,8 @@ class DebateManager:
         if duplicates and overlooked and len(chosen) >= max_tools:
             # Replace the weakest duplicate slot with an overlooked tool.
             for tool in list(reversed(chosen)):
-                if tool in duplicates and overlooked:
+                # A method outside the starting set stays when agents voted for it.
+                if tool in duplicates and tool in ARSENAL and overlooked:
                     chosen.remove(tool)
                     fill = overlooked.pop(0)
                     if fill not in chosen:

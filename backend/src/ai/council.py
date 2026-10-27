@@ -1,4 +1,4 @@
-"""Parallel AI threat council: agents debate and pick the next arsenal tools."""
+"""Parallel AI threat council: agents debate, then run starting checks or other methods."""
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
@@ -8,7 +8,7 @@ from ai.debate_manger import DebateManager
 from ai.meterless_memory import MemoryRetrieval, MemoryStore, format_reinjection
 from ai.meterless_scout import Scout
 from ai.model_client import ModelClient, parse_model_decision
-from ai.tool import ARSENAL, run_tool
+from ai.tool import ARSENAL, normalize_method, run_tool
 from ai.zetaris_client import ZetarisClient
 
 
@@ -21,11 +21,13 @@ def _env_int(name, default):
 
 _MODEL_SYSTEM = (
     "You are one analyst in a defensive security council. "
-    "Choose the next inspection tools from the allowed list only. "
-    "Do not invent tools, exploit steps, payloads, or attack procedures. "
+    "The preloaded arsenal is the convenient starting set. "
+    "You may also name other inspection methods that are not implemented in this repo, "
+    "as short snake_case names. "
+    "Review a fetched response or uploaded source. "
+    "Do not request exploit payloads, flood traffic, or unauthorized access steps. "
     "Reply with JSON only: {\"argument\": \"...because...\", \"votes\": [\"tool_name\"]}. "
-    "The argument must say why, using because, since, or therefore. "
-    "Votes must be a subset of the allowed tools."
+    "The argument must say why, using because, since, or therefore."
 )
 
 
@@ -65,8 +67,12 @@ class CouncilAgent:
         if self.model is None or not self.model.configured():
             return None
         allowed = [name for name in ARSENAL if name not in (target.get("_used") or [])]
-        # Prefer this role's remaining tools, but the model may pick any unused arsenal tool.
+        # Starting set for convenience. The model may also name other methods.
         catalog = list(dict.fromkeys(available + allowed))
+        stay_inspect = bool(target.get("stay_inspect"))
+        if stay_inspect:
+            catalog = [name for name in catalog if name in ARSENAL]
+        extra = "" if stay_inspect else " Other snake_case inspection methods are also allowed."
         messages = [
             {"role": "system", "content": _MODEL_SYSTEM},
             {
@@ -74,7 +80,7 @@ class CouncilAgent:
                 "content": (
                     f"Agent: {self.name} ({self.role}).\n"
                     f"Target kind: {target.get('kind')}.\n"
-                    f"Allowed tools: {', '.join(catalog) or 'none'}.\n"
+                    f"Convenient starting tools: {', '.join(catalog) or 'none'}.{extra}\n"
                     f"Prior findings: {memory_text[:800] or 'none yet'}.\n"
                     f"Intel source: {intel.get('source')}.\n"
                     f"Defense notes: {cve_brief[:400] or 'none'}.\n"
@@ -82,7 +88,9 @@ class CouncilAgent:
                 ),
             },
         ]
-        parsed = parse_model_decision(self.model.complete(messages), catalog)
+        parsed = parse_model_decision(
+            self.model.complete(messages), catalog, stay_inspect=stay_inspect
+        )
         if not parsed:
             return None
         return {
@@ -113,13 +121,24 @@ def default_agents(model=None):
         CouncilAgent(
             "recon",
             "surface mapper",
-            ["pen_test", "misconfiguration", "supply_chain", "clickjacking"],
+            ["pen_test", "misconfiguration", "supply_chain", "clickjacking", "cors", "tls_posture", "graphql"],
             model=model,
         ),
         CouncilAgent(
             "attacker_mindset",
             "offensive analyst (defensive checks only)",
-            ["injection", "xss", "ssrf", "access_control", "business_logic"],
+            [
+                "injection",
+                "xss",
+                "ssrf",
+                "access_control",
+                "business_logic",
+                "path_traversal",
+                "xxe",
+                "ssti",
+                "insecure_deserialization",
+                "prototype_pollution",
+            ],
             model=model,
         ),
         CouncilAgent(
@@ -131,14 +150,30 @@ def default_agents(model=None):
                 "broken_authentication",
                 "cryptographic_failures",
                 "account_takeover",
+                "user_enumeration",
                 "website_element_manipulation",
+                "oauth",
+                "jwt",
+                "session_fixation",
+                "security_logging",
             ],
             model=model,
         ),
         CouncilAgent(
             "intel",
             "threat-intel / Zetaris analyst",
-            ["pen_test", "supply_chain", "misconfiguration", "denial_of_service", "api_mass_assignment"],
+            [
+                "pen_test",
+                "supply_chain",
+                "misconfiguration",
+                "denial_of_service",
+                "ddos",
+                "rate_limit",
+                "load_balancing",
+                "api_mass_assignment",
+                "sensitive_data",
+                "cloud_config",
+            ],
             model=model,
         ),
         CouncilAgent(
@@ -154,9 +189,10 @@ def _tally_votes(proposals, used_tools):
     scores = {}
     for proposal in proposals:
         for index, tool in enumerate(proposal.get("votes") or []):
-            if tool in used_tools or tool not in ARSENAL:
+            method = normalize_method(tool)
+            if not method or method in used_tools:
                 continue
-            scores[tool] = scores.get(tool, 0) + (3 - index)
+            scores[method] = scores.get(method, 0) + (3 - index)
     return sorted(scores.items(), key=lambda item: item[1], reverse=True)
 
 
@@ -238,7 +274,7 @@ class ThreatCouncil:
 
         with ThreadPoolExecutor(max_workers=len(self.agents)) as pool:
             futures = [pool.submit(work, agent) for agent in self.agents]
-            for future in as_completed(futures):
+            for future in futures:
                 proposals.append(future.result())
         return proposals, memory_hit["trace"]
 
@@ -289,16 +325,20 @@ class ThreatCouncil:
             # Debate manager resolves collisions first; Scout fills remaining slots.
             chosen = list(moderated.get("chosen_tools") or [])
             for name, _ in vote_ranking:
-                if name not in chosen and name not in used_tools and name in ARSENAL:
-                    chosen.append(name)
+                method = normalize_method(name)
+                if method and method not in chosen and method not in used_tools:
+                    chosen.append(method)
                 if len(chosen) >= self.tools_per_round:
                     break
             for step in decision.get("toolPlan") or []:
-                name = step.get("tool")
-                if name and name not in chosen and name not in used_tools and name in ARSENAL:
-                    chosen.append(name)
+                method = normalize_method(step.get("tool"))
+                if method and method not in chosen and method not in used_tools:
+                    chosen.append(method)
                 if len(chosen) >= self.tools_per_round:
                     break
+
+            if target.get("stay_inspect"):
+                chosen = [name for name in chosen if name in ARSENAL]
 
             round_entry = {
                 "round": round_index,
@@ -318,6 +358,7 @@ class ThreatCouncil:
                 },
                 "memory_trace": memory_trace,
                 "chosen_tools": chosen,
+                "stay_inspect": bool(target.get("stay_inspect")),
             }
             debate_log.append(round_entry)
 

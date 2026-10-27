@@ -122,7 +122,7 @@ def _explain_score(score_info, counts, outcomes, matched_cves, cross_check):
         )
     parts = [
         lead,
-        f"The scan used {len(outcomes['used'])} arsenal tools: "
+        f"The scan used {len(outcomes['used'])} checks: "
         f"{len(passed)} passed, {len(failed)} failed, and {len(outcomes['info'])} were informational.",
         f"Finding severity counts were high={counts['high']}, medium={counts['medium']}, "
         f"low={counts['low']}, info={counts['info']}.",
