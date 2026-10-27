@@ -11,6 +11,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 import tempfile
+from unittest.mock import patch
 
 from ai import cve_manger
 from ai.council import ThreatCouncil
@@ -57,7 +58,7 @@ def _load_api_module():
     return module
 
 
-def _api_client():
+def _api_client(module=None):
     here = str(SRC)
     if here in sys.path:
         sys.path.remove(here)
@@ -68,7 +69,7 @@ def _api_client():
         sys.path.insert(0, here)
         raise unittest.SkipTest("fastapi is not installed")
     sys.path.insert(0, here)
-    return TestClient(_load_api_module().create_app())
+    return TestClient((module or _load_api_module()).create_app())
 
 
 class ArsenalTests(unittest.TestCase):
@@ -516,6 +517,76 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(kept.status_code, 200)
         self.assertEqual(kept.json()["narrative"], "Patched scan.")
         self.assertEqual(rejected.status_code, 400)
+
+    def test_github_scan_requires_token_and_github_repository(self):
+        client = _api_client()
+        missing_token = client.post("/scan/github", json={"repository": "owner/repo"})
+        invalid_host = client.post(
+            "/scan/github",
+            json={"repository": "https://example.com/owner/repo"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+        self.assertEqual(missing_token.status_code, 401)
+        self.assertEqual(invalid_host.status_code, 400)
+
+    def test_github_scan_rejects_repository_not_owned_by_token_user(self):
+        module = _load_api_module()
+        def github_json(path, token):
+            self.assertEqual(token, "test-token")
+            if path == "/user":
+                return {"login": "another-user"}
+            return {"owner": {"login": "repo-owner"}}
+
+        with patch.object(module, "_github_api_json", side_effect=github_json), patch.object(
+            module,
+            "_download_github_archive",
+            side_effect=AssertionError("non-owner must not download the repository"),
+        ):
+            response = _api_client(module).post(
+                "/scan/github",
+                json={"repository": "repo-owner/private-repo"},
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("owned", response.json()["detail"])
+
+    def test_github_scan_sends_owned_archive_to_source_scanner(self):
+        module = _load_api_module()
+        from ai import main as scan_main
+
+        archive_buffer = io.BytesIO()
+        with zipfile.ZipFile(archive_buffer, "w") as archive:
+            archive.writestr("project/src/app.py", "print('source')")
+        captured = {}
+
+        def github_json(path, token):
+            self.assertEqual(token, "test-token")
+            if path == "/user":
+                return {"login": "repo-owner"}
+            return {"owner": {"login": "Repo-Owner"}}
+
+        def fake_scan(target, company_hint=""):
+            captured["target"] = target
+            captured["company_hint"] = company_hint
+            return {"target": {"kind": "source"}, "summary": {}}
+
+        with patch.object(module, "_github_api_json", side_effect=github_json), patch.object(
+            module,
+            "_download_github_archive",
+            return_value=archive_buffer.getvalue(),
+        ), patch.object(scan_main, "run_scan", side_effect=fake_scan):
+            response = _api_client(module).post(
+                "/scan/github",
+                json={"repository": "https://github.com/repo-owner/project.git"},
+                headers={"Authorization": "Bearer test-token"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured["target"]["kind"], "source")
+        self.assertEqual(captured["target"]["files"], {"project/src/app.py": "print('source')"})
+        self.assertEqual(captured["company_hint"], "repo-owner/project")
+        self.assertEqual(response.json()["target"]["url"], "https://github.com/repo-owner/project")
 
 
 class CveKnowledgeTests(unittest.TestCase):
